@@ -1,6 +1,22 @@
 # Everest Mod CLI
 
-A command-line interface tool for managing Celeste mods using Everest API. WIP.
+**WIP**.
+
+A command-line interface tool for managing Celeste mods using Everest API.
+
+Currently, target **Steam** and **Linux** installation.
+
+## Motivation
+
+Everest and Olympus are great tool to managing Celeste mods.
+
+However, some QoLs are missing:
+
+- The download speed in the game menu is too slow in some countries and no way to accelarate them like using `aria2c`.
+- In the mod menu of the game we can't *cancel* or *pause/resume* download process.
+- We couldn't find out which *dependencies* are still needed by another mods when uninstall specific mods.
+
+> I found the download speed is not so slow like in-game when I using web browser or CLI tools like `curl` or `wget`.
 
 ## Features
 
@@ -9,7 +25,24 @@ A command-line interface tool for managing Celeste mods using Everest API. WIP.
 
 ## Installation
 
-[Installation instructions will be added]
+Clone this repo and build it yourself using rust.
+
+```sh
+git clone https://github.com/pinpinroku/everest-mod-cli.git
+cd everest-mod-cli
+cargo build --release
+```
+
+Then symlink the binary to the local bin directory.
+
+```sh
+mkdir -p ~/.local/bin/
+cd ~/.local/bin/
+ln -s /home/{username}/everest-mod-cli/target/release/everest-mod-cli modmgr
+modmgr --help
+```
+
+> Replace `{username}` to actual username. Chose your prefered filename for symlink.
 
 ## Usage
 
