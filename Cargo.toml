@@ -4,17 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
-directories = "5.0"
-reqwest = { version = "0.12", features = ["json", "stream"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
-tokio = { version = "1.0", features = ["full"] }
-futures-util = "0.3"
-indicatif = "0.17"
+clap = { version = "4.5.23", features = ["derive"] }
+futures-util = "0.3.31"
+indicatif = "0.17.9"
+reqwest = { version = "0.12.12", features = ["stream"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_yaml = "0.9.30"
+tokio = { version = "1.42.0", features = ["full"] }
 zip = "2.2.2"
-md-5 = "0.10"
-digest = "0.10"
+xxhash-rust = { version = "0.8.15", features = ["xxh64"] }
 
 [dev-dependencies]
-tempfile = "3.9"
+tempfile = "3.15.0"

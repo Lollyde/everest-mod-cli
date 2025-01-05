@@ -6,9 +6,7 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::everest_yaml::{ModMetadataList, ModMetadata};
 use crate::mod_info::ModCatalog;
-use md5::Md5;
-use digest::Digest;
-use directories::BaseDirs;
+use xxhash_rust::xxh64::xxh64;
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -32,8 +30,14 @@ pub struct Downloader {
 
 impl Downloader {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let base_dirs = BaseDirs::new().ok_or("Could not determine home directory")?;
-        let download_dir = base_dirs.data_dir().join("Everest").join("Mods");
+        let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
+        let download_dir = PathBuf::from(home)
+            .join(".local/share/Steam/steamapps/common/Celeste/Mods");
+        
+        if !download_dir.exists() {
+            return Err("Celeste mods directory not found. Is Celeste installed through Steam?".into());
+        }
+
         Ok(Self {
             client: Client::new(),
             download_dir,
@@ -154,10 +158,9 @@ pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> Result<bo
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await?;
 
-    let mut hasher = Md5::new();
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    let hash = format!("{:x}", result);
+    let hash = format!("{:x}", xxh64(&buffer, 0));
+    println!("Computed hash: {}", hash);
+    println!("Expected hash: {}", expected_hash);
 
     Ok(hash == expected_hash.to_lowercase())
 }
