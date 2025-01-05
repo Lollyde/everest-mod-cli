@@ -33,8 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .required(true))
         )
         .subcommand(
-            Command::new("download")
-                .about("Download a mod")
+            Command::new("install")
+                .about("Install a mod")
                 .arg(Arg::new("name")
                     .help("Mod name")
                     .required(true))
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Mod '{}' not found", name);
             }
         }
-        Some(("download", sub_matches)) => {
+        Some(("install", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").unwrap();
             let skip_verify = sub_matches.get_flag("no-verify");
 
