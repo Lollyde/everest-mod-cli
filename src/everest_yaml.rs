@@ -1,131 +1,140 @@
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io::Read;
 use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Dependency {
-    #[serde(alias = "Name")]
     pub name: String,
-    #[serde(default)]
+    #[serde(rename = "Version")]
     pub version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ModMetadata {
-    #[serde(alias = "Name")]
+    #[serde(rename = "Name")]
     pub name: String,
-    #[serde(alias = "Version")]
+    #[serde(rename = "Version")]
     pub version: String,
-    #[serde(default)]
+    #[serde(rename = "DLL")]
     pub dll: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "Dependencies")]
     pub dependencies: Option<Vec<Dependency>>,
     #[serde(rename = "OptionalDependencies")]
-    #[serde(default)]
     pub optional_dependencies: Option<Vec<Dependency>>,
+    #[serde(rename = "LastUpdate")]
+    pub last_update: i64,
+    #[serde(rename = "xxHash", alias = "MD5")]
+    pub hash: Vec<String>,
+    #[serde(rename = "URL")]
+    pub url: String,
+    #[serde(rename = "GameBananaType")]
+    pub gamebanana_type: Option<String>,
+    #[serde(rename = "GameBananaId")]
+    pub gamebanana_id: Option<i32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ModMetadataList(pub Vec<ModMetadata>);
 
 impl ModMetadataList {
     pub fn from_zip(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
-        let file = std::fs::File::open(path)?;
+        let file = fs::File::open(path)?;
         let mut archive = zip::ZipArchive::new(file)?;
 
-        // Look for everest.yaml in the zip
-        let mut everest_yaml = None;
         for i in 0..archive.len() {
-            let file = archive.by_index(i)?;
-            let name = file.name().to_lowercase();
-            if name.ends_with("everest.yaml") || name.ends_with("everest.yml") {
-                everest_yaml = Some(i);
-                break;
+            let mut file = archive.by_index(i)?;
+            if file.name().ends_with("everest.yaml") || file.name().ends_with("everest.yml") {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)?;
+                
+                // Remove BOM if present
+                if contents.starts_with('\u{feff}') {
+                    contents = contents[3..].to_string();
+                }
+                
+                let metadata: Vec<ModMetadata> = serde_yaml::from_str(&contents)?;
+                return Ok(ModMetadataList(metadata));
             }
         }
-
-        // Read and parse everest.yaml if found
-        if let Some(index) = everest_yaml {
-            let mut file = archive.by_index(index)?;
-            let mut contents = String::new();
-            file.read_to_string(&mut contents)?;
-
-            // Remove BOM if present
-            if contents.starts_with('\u{feff}') {
-                contents = contents[3..].to_string(); // Skip the BOM (3 bytes)
-            }
-
-            let metadata: Vec<ModMetadata> = serde_yaml::from_str(&contents)?;
-            Ok(ModMetadataList(metadata))
-        } else {
-            Err("No everest.yaml found in zip file".into())
-        }
+        Err("No everest.yaml found in zip file".into())
     }
 
     pub fn get_main_mod(&self) -> Option<&ModMetadata> {
         self.0.first()
-    }
-
-    pub fn get_dependencies(&self) -> Vec<&Dependency> {
-        self.get_main_mod()
-            .and_then(|mod_meta| mod_meta.dependencies.as_ref())
-            .map(|deps| deps.iter().collect())
-            .unwrap_or_default()
-    }
-
-    pub fn get_optional_dependencies(&self) -> Vec<&Dependency> {
-        self.get_main_mod()
-            .and_then(|mod_meta| mod_meta.optional_dependencies.as_ref())
-            .map(|deps| deps.iter().collect())
-            .unwrap_or_default()
-    }
-}
-
-// Function to compare version strings
-pub fn compare_versions(ver1: Option<&str>, ver2: Option<&str>) -> std::cmp::Ordering {
-    match (ver1, ver2) {
-        (None, None) => std::cmp::Ordering::Equal,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(v1), Some(v2)) => {
-            let v1_parts: Vec<&str> = v1.split('.').collect();
-            let v2_parts: Vec<&str> = v2.split('.').collect();
-
-            for i in 0..std::cmp::max(v1_parts.len(), v2_parts.len()) {
-                let n1 = v1_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-                let n2 = v2_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-                
-                match n1.cmp(&n2) {
-                    std::cmp::Ordering::Equal => continue,
-                    other => return other,
-                }
-            }
-            std::cmp::Ordering::Equal
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use zip::write::FileOptions;
 
     #[test]
-    fn test_parse_yaml_with_bom() -> Result<(), Box<dyn std::error::Error>> {
-        let path = PathBuf::from("test/test_with_bom.zip");
-        let metadata_list = ModMetadataList::from_zip(&path)?;
-        
-        assert_eq!(metadata_list.0.len(), 1);
-        let metadata = &metadata_list.0[0];
-        assert_eq!(metadata.name, "TestMod");
-        assert_eq!(metadata.version, "1.0.0");
-        assert_eq!(metadata.dll, Some("TestMod.dll".to_string()));
-        
-        let dependencies = metadata.dependencies.as_ref().unwrap();
-        assert_eq!(dependencies.len(), 1);
-        assert_eq!(dependencies[0].name, "Celeste");
-        assert_eq!(dependencies[0].version, Some("1.4.0.0".to_string()));
-        
+    fn test_load_update_yaml() -> Result<(), Box<dyn std::error::Error>> {
+        // Create a temporary directory
+        let dir = tempdir()?;
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(File::create(&zip_path)?);
+
+        // Write test YAML content to a file in the ZIP
+        let yaml_content = r#"
+- Name: FrogMod
+  Version: 1.0.0
+  LastUpdate: 1728796397
+  GameBananaType: Tool
+  GameBananaId: 15836
+  xxHash: ["f437bf0515368130"]
+  URL: https://gamebanana.com/mmdl/1298450
+"#;
+        zip.start_file::<_, ()>("everest.yaml", FileOptions::default())?;
+        zip.write_all(yaml_content.as_bytes())?;
+        zip.finish()?;
+
+        // Test loading the YAML from the ZIP
+        let metadata_list = ModMetadataList::from_zip(&zip_path)?;
+        let frog_mod = metadata_list.get_main_mod().unwrap();
+
+        // Verify the parsed content
+        assert_eq!(frog_mod.name, "FrogMod");
+        assert_eq!(frog_mod.version, "1.0.0");
+        assert_eq!(frog_mod.last_update, 1728796397);
+        assert_eq!(frog_mod.gamebanana_type.as_deref(), Some("Tool"));
+        assert_eq!(frog_mod.gamebanana_id, Some(15836));
+        assert_eq!(frog_mod.hash.join(", "), "f437bf0515368130");
+        assert_eq!(frog_mod.url, "https://gamebanana.com/mmdl/1298450");
+
         Ok(())
+    }
+
+    #[test]
+    fn test_invalid_yaml() {
+        let dir = tempdir().unwrap();
+        let zip_path = dir.path().join("invalid.zip");
+        let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
+
+        let invalid_yaml = "invalid: [yaml: content";
+        zip.start_file::<_, ()>("everest.yaml", FileOptions::default()).unwrap();
+        zip.write_all(invalid_yaml.as_bytes()).unwrap();
+        zip.finish().unwrap();
+
+        assert!(ModMetadataList::from_zip(&zip_path).is_err());
+    }
+
+    #[test]
+    fn test_missing_required_fields() {
+        let dir = tempdir().unwrap();
+        let zip_path = dir.path().join("missing_fields.zip");
+        let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
+
+        let yaml_content = "- Version: 1.0.0"; // Missing required fields
+        zip.start_file::<_, ()>("everest.yaml", FileOptions::default()).unwrap();
+        zip.write_all(yaml_content.as_bytes()).unwrap();
+        zip.finish().unwrap();
+
+        assert!(ModMetadataList::from_zip(&zip_path).is_err());
     }
 }

@@ -4,7 +4,7 @@ mod everest_yaml;
 
 use clap::{Command, Arg, ArgAction};
 use mod_info::ModCatalog;
-use download::{ModDownloader, format_size};
+use crate::download::{Downloader, format_size};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_matches();
 
     // Initialize downloader early for list and update commands
-    let downloader = ModDownloader::new()?;
+    let downloader = Downloader::new()?;
 
     // Handle list command separately as it doesn't need the catalog
     if let Some(("list", _)) = matches.subcommand() {
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Last updated: {}", mod_info.last_update);
                 println!("URL: {}", mod_info.url);
                 println!("GameBanana ID: {:?}", mod_info.gamebanana_id);
-                println!("Hash: {}", mod_info.xx_hash.join(", "));
+                println!("Hash: {}", mod_info.hash.join(", "));
             } else {
                 println!("Mod '{}' not found", name);
             }
@@ -146,9 +146,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(mod_info) = catalog.get_mod(name) {
                 let file_path = downloader.download_mod(&mod_info.url, &mod_info.name).await?;
 
-                if !skip_verify && !mod_info.xx_hash.is_empty() {
+                if !skip_verify && !mod_info.hash.is_empty() {
                     println!("Verifying download...");
-                    let hash = &mod_info.xx_hash[0];
+                    let hash = &mod_info.hash[0];
                     if download::verify_checksum(&file_path, hash).await? {
                         println!("Checksum verification successful!");
                     } else {

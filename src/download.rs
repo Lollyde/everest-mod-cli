@@ -1,12 +1,14 @@
 use std::path::{Path, PathBuf};
 use reqwest::Client;
 use tokio::fs;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use dir::home_dir;
+use tokio::io::AsyncWriteExt;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::everest_yaml::{ModMetadataList, ModMetadata};
 use crate::mod_info::ModCatalog;
+use md5::Md5;
+use digest::Digest;
+use directories::BaseDirs;
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -14,28 +16,27 @@ pub struct UpdateInfo {
     pub current_version: String,
     pub available_version: String,
     pub url: String,
-    pub file_size: u64,
-}
-
-pub struct ModDownloader {
-    client: Client,
-    download_dir: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct InstalledMod {
     pub name: String,
-    pub file_size: u64,
-    pub file_path: PathBuf,
     pub metadata: Option<ModMetadata>,
+    pub file_size: u64,
 }
 
-impl ModDownloader {
+pub struct Downloader {
+    client: Client,
+    download_dir: PathBuf,
+}
+
+impl Downloader {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let mods_dir = get_mods_directory()?;
+        let base_dirs = BaseDirs::new().ok_or("Could not determine home directory")?;
+        let download_dir = base_dirs.data_dir().join("Everest").join("Mods");
         Ok(Self {
             client: Client::new(),
-            download_dir: mods_dir,
+            download_dir,
         })
     }
 
@@ -53,27 +54,8 @@ impl ModDownloader {
                             current_version: metadata.version,
                             available_version: available_mod.version.clone(),
                             url: available_mod.url.clone(),
-                            file_size: installed_mod.file_size,
+                            // Removed file_size field
                         });
-                    }
-
-                    // Check dependencies for updates
-                    if let Some(deps) = metadata.dependencies {
-                        for dep in deps {
-                            if let Some(available_dep) = catalog.get_mod(&dep.name) {
-                                if let Some(current_ver) = dep.version {
-                                    if compare_versions(&available_dep.version, &current_ver).is_gt() {
-                                        updates.push(UpdateInfo {
-                                            name: dep.name,
-                                            current_version: current_ver,
-                                            available_version: available_dep.version.clone(),
-                                            url: available_dep.url.clone(),
-                                            file_size: 0, // Unknown until downloaded
-                                        });
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -83,43 +65,44 @@ impl ModDownloader {
     }
 
     pub async fn download_mod(&self, url: &str, name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        // Create mods directory if it doesn't exist
-        fs::create_dir_all(&self.download_dir).await?;
-
-        // Start the download
-        println!("Downloading {} from {}", name, url);
         let response = self.client.get(url).send().await?;
-        
-        // Get content length for progress bar
-        let total_size = response
-            .content_length()
-            .unwrap_or(0);
+        let total_size = response.content_length().unwrap_or(0);
 
-        // Setup progress bar
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
             .unwrap()
             .progress_chars("#>-"));
 
-        // Get the file name from the URL or use the mod name
-        let file_name = format!("{}.zip", name);
-        let file_path = self.download_dir.join(&file_name);
-
-        // Stream the download to file with progress
-        let mut file = fs::File::create(&file_path).await?;
-        let mut downloaded: u64 = 0;
         let mut stream = response.bytes_stream();
+        let download_path = self.download_dir.join(format!("{}.zip", name));
+        let mut file = fs::File::create(&download_path).await?;
+        let mut downloaded: u64 = 0;
 
-        while let Some(item) = stream.next().await {
-            let chunk = item?;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
             file.write_all(&chunk).await?;
-            downloaded = downloaded.saturating_add(chunk.len() as u64);
-            pb.set_position(downloaded);
+            let new = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
+            downloaded = new;
+            pb.set_position(new);
         }
 
-        pb.finish_with_message(format!("Downloaded {} successfully", name));
-        Ok(file_path)
+        pb.finish_with_message("Download complete");
+
+        // Verify checksum if available
+        if let Some(mod_info) = ModCatalog::fetch_from_network().await?.get_mod(name) {
+            if !mod_info.hash.is_empty() {
+                let expected_hash = &mod_info.hash[0];
+                if verify_checksum(&download_path, expected_hash).await? {
+                    println!("Checksum verification successful");
+                } else {
+                    fs::remove_file(&download_path).await?;
+                    return Err("Checksum verification failed".into());
+                }
+            }
+        }
+
+        Ok(download_path)
     }
 
     pub async fn list_installed_mods(&self) -> Result<Vec<InstalledMod>, Box<dyn std::error::Error>> {
@@ -152,9 +135,8 @@ impl ModDownloader {
 
                 installed_mods.push(InstalledMod {
                     name,
-                    file_size: metadata.len(),
-                    file_path: path,
                     metadata: mod_metadata,
+                    file_size: metadata.len(),
                 });
             }
         }
@@ -165,25 +147,19 @@ impl ModDownloader {
     }
 }
 
-pub fn get_mods_directory() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let home = home_dir().ok_or("Could not find home directory")?;
-    Ok(home.join(".local/share/Steam/steamapps/common/Celeste/Mods"))
-}
-
 pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    use sha1::{Sha1, Digest};
     use tokio::io::AsyncReadExt;
 
     let mut file = fs::File::open(file_path).await?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await?;
 
-    let mut hasher = Sha1::new();
+    let mut hasher = Md5::new();
     hasher.update(&buffer);
     let result = hasher.finalize();
-    let hash = hex::encode(result);
+    let hash = format!("{:x}", result);
 
-    Ok(hash == expected_hash)
+    Ok(hash == expected_hash.to_lowercase())
 }
 
 pub fn format_size(size: u64) -> String {

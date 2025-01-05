@@ -13,8 +13,8 @@ pub struct ModInfo {
     pub last_update: i64,
     #[serde(rename = "URL")]
     pub url: String,
-    #[serde(rename = "xxHash")]
-    pub xx_hash: Vec<String>,
+    #[serde(rename = "xxHash", alias = "MD5")]
+    pub hash: Vec<String>,
     #[serde(rename = "GameBananaType")]
     pub gamebanana_type: Option<String>,
     #[serde(rename = "GameBananaId")]
@@ -90,7 +90,6 @@ impl ModCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_load_update_yaml() -> Result<(), Box<dyn std::error::Error>> {
@@ -105,7 +104,7 @@ mod tests {
         assert_eq!(frog_mod.last_update, 1728796397);
         assert_eq!(frog_mod.gamebanana_type.as_deref(), Some("Tool"));
         assert_eq!(frog_mod.gamebanana_id, Some(15836));
-        assert_eq!(frog_mod.xx_hash, vec!["f437bf0515368130"]);
+        assert_eq!(frog_mod.hash, vec!["f437bf0515368130"]);
         assert_eq!(frog_mod.url, "https://gamebanana.com/mmdl/1298450");
 
         // Test mod with different version format
