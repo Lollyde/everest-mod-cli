@@ -42,22 +42,17 @@ impl ModMetadataList {
         let file = fs::File::open(path)?;
         let mut archive = zip::ZipArchive::new(file)?;
 
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
-            if file.name().ends_with("everest.yaml") || file.name().ends_with("everest.yml") {
-                let mut contents = String::new();
-                file.read_to_string(&mut contents)?;
-                
-                // Remove BOM if present
-                if contents.starts_with('\u{feff}') {
-                    contents = contents[3..].to_string();
-                }
-                
-                let metadata: Vec<ModMetadata> = serde_yaml::from_str(&contents)?;
-                return Ok(ModMetadataList(metadata));
-            }
+        let mut file = archive.by_name("everest.yaml")?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+
+        // Remove BOM if present
+        if contents.starts_with('\u{feff}') {
+            contents = contents[3..].to_string(); // BOM has 3 bytes
         }
-        Err("No everest.yaml found in zip file".into())
+
+        let metadata: Vec<ModMetadata> = serde_yaml::from_str(&contents)?;
+        Ok(ModMetadataList(metadata))
     }
 
     pub fn get_main_mod(&self) -> Option<&ModMetadata> {
@@ -117,7 +112,8 @@ mod tests {
         let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
 
         let invalid_yaml = "invalid: [yaml: content";
-        zip.start_file::<_, ()>("everest.yaml", FileOptions::default()).unwrap();
+        zip.start_file::<_, ()>("everest.yaml", FileOptions::default())
+            .unwrap();
         zip.write_all(invalid_yaml.as_bytes()).unwrap();
         zip.finish().unwrap();
 
@@ -131,7 +127,8 @@ mod tests {
         let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
 
         let yaml_content = "- Version: 1.0.0"; // Missing required fields
-        zip.start_file::<_, ()>("everest.yaml", FileOptions::default()).unwrap();
+        zip.start_file::<_, ()>("everest.yaml", FileOptions::default())
+            .unwrap();
         zip.write_all(yaml_content.as_bytes()).unwrap();
         zip.finish().unwrap();
 
