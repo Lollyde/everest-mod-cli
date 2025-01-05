@@ -12,7 +12,7 @@ Everest and Olympus are great tool to managing Celeste mods.
 
 However, some QoLs are missing:
 
-- The download speed in the game menu is too slow in some countries and no way to accelarate them like using `aria2c`.
+- The download speed in the game menu is too slow in some countries and no way to accelerate them like using `aria2c`.
 - In the mod menu of the game we can't *cancel* or *pause/resume* download process.
 - We couldn't find out which *dependencies* are still needed by another mods when uninstall specific mods.
 
@@ -37,12 +37,8 @@ Then symlink the binary to the local bin directory.
 
 ```sh
 mkdir -p ~/.local/bin/
-cd ~/.local/bin/
-ln -s /home/{username}/everest-mod-cli/target/release/everest-mod-cli modmgr
-modmgr --help
+ln -s $HOME/everest-mod-cli/target/release/everest-mod-cli $HOME/.local/bin/everest-mod-cli
 ```
-
-> Replace `{username}` to actual username. Chose your prefered filename for symlink.
 
 ## Usage
 
