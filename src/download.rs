@@ -20,7 +20,6 @@ pub struct UpdateInfo {
 pub struct InstalledMod {
     pub name: String,
     pub metadata: Option<ModMetadata>,
-    pub file_size: u64,
 }
 
 pub struct Downloader {
@@ -58,7 +57,6 @@ impl Downloader {
                             current_version: metadata.version,
                             available_version: available_mod.version.clone(),
                             url: available_mod.url.clone(),
-                            // Removed file_size field
                         });
                     }
                 }
@@ -121,7 +119,6 @@ impl Downloader {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("zip") {
-                let metadata = entry.metadata().await?;
                 let name = path
                     .file_stem()
                     .and_then(|s| s.to_str())
@@ -140,7 +137,6 @@ impl Downloader {
                 installed_mods.push(InstalledMod {
                     name,
                     metadata: mod_metadata,
-                    file_size: metadata.len(),
                 });
             }
         }
@@ -163,19 +159,6 @@ pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> Result<bo
     println!("Expected hash: {}", expected_hash);
 
     Ok(hash == expected_hash.to_lowercase())
-}
-
-pub fn format_size(size: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
-    let mut size = size as f64;
-    let mut unit_index = 0;
-
-    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit_index += 1;
-    }
-
-    format!("{:.2} {}", size, UNITS[unit_index])
 }
 
 fn compare_versions(ver1: &str, ver2: &str) -> std::cmp::Ordering {

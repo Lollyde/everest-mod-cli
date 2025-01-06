@@ -4,7 +4,7 @@ mod everest_yaml;
 
 use clap::{Command, Arg, ArgAction};
 use mod_info::ModCatalog;
-use crate::download::{Downloader, format_size};
+use crate::download::Downloader;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,12 +12,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .version("0.1.0")
         .author("Your Name")
         .about("Celeste mod management CLI")
-        .arg(
-            Arg::new("test")
-                .long("test")
-                .help("Use test YAML file instead of fetching from network")
-                .action(ArgAction::SetTrue)
-        )
         .subcommand(
             Command::new("search")
                 .about("Search for mods")
@@ -38,14 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .arg(Arg::new("name")
                     .help("Mod name")
                     .required(true))
-                .arg(Arg::new("no-verify")
-                    .long("no-verify")
-                    .help("Skip checksum verification")
-                    .action(ArgAction::SetTrue))
         )
         .subcommand(
             Command::new("list")
                 .about("List installed mods")
+        )
+        .subcommand(
+            Command::new("show")
+                .about("Show detailed information about an installed mod")
+                .arg(Arg::new("name")
+                    .help("Mod name")
+                    .required(true))
         )
         .subcommand(
             Command::new("update")
@@ -70,46 +67,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("Installed mods:");
         for mod_info in installed_mods {
-            print!("  {} ({})", mod_info.name, format_size(mod_info.file_size));
-            
             if let Some(metadata) = mod_info.metadata {
-                println!(" - v{}", metadata.version);
-                
-                if let Some(deps) = metadata.dependencies {
-                    println!("    Dependencies:");
-                    for dep in deps {
-                        if let Some(ver) = dep.version {
-                            println!("      - {} v{}", dep.name, ver);
-                        } else {
-                            println!("      - {}", dep.name);
-                        }
-                    }
-                }
-                
-                if let Some(opt_deps) = metadata.optional_dependencies {
-                    println!("    Optional Dependencies:");
-                    for dep in opt_deps {
-                        if let Some(ver) = dep.version {
-                            println!("      - {} v{}", dep.name, ver);
-                        } else {
-                            println!("      - {}", dep.name);
-                        }
-                    }
-                }
+                println!("  {} v{}", mod_info.name, metadata.version);
             } else {
-                println!(" (no metadata)");
+                println!("  {} (no metadata)", mod_info.name);
             }
         }
         return Ok(());
     }
 
+    // Handle show command separately as it only needs installed mods
+    if let Some(("show", sub_matches)) = matches.subcommand() {
+        let name = sub_matches.get_one::<String>("name").unwrap();
+        let installed_mods = downloader.list_installed_mods().await?;
+        
+        if let Some(mod_info) = installed_mods.iter().find(|m| m.name.as_str() == name) {
+            if let Some(metadata) = &mod_info.metadata {
+                println!("Name: {}", mod_info.name);
+                println!("Version: {}", metadata.version);
+                
+                if let Some(deps) = &metadata.dependencies {
+                    println!("\nDependencies:");
+                    for dep in deps {
+                        if let Some(ver) = &dep.version {
+                            println!("  - {} v{}", dep.name, ver);
+                        } else {
+                            println!("  - {}", dep.name);
+                        }
+                    }
+                }
+                
+                if let Some(opt_deps) = &metadata.optional_dependencies {
+                    println!("\nOptional Dependencies:");
+                    for dep in opt_deps {
+                        if let Some(ver) = &dep.version {
+                            println!("  - {} v{}", dep.name, ver);
+                        } else {
+                            println!("  - {}", dep.name);
+                        }
+                    }
+                }
+            } else {
+                println!("No metadata available for mod '{}'", name);
+            }
+        } else {
+            println!("Mod '{}' is not installed", name);
+        }
+        return Ok(());
+    }
+
     // Load mod catalog for other commands
-    let catalog = if matches.get_flag("test") {
-        println!("Using test YAML file");
-        ModCatalog::load_from_file("test/everest_update.yaml").await?
-    } else {
-        ModCatalog::fetch_from_network().await?
-    };
+    let catalog = ModCatalog::fetch_from_network().await?;
 
     match matches.subcommand() {
         Some(("search", sub_matches)) => {
@@ -141,22 +149,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(("install", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").unwrap();
-            let skip_verify = sub_matches.get_flag("no-verify");
-
+            
             if let Some(mod_info) = catalog.get_mod(name) {
                 let file_path = downloader.download_mod(&mod_info.url, &mod_info.name).await?;
 
-                if !skip_verify && !mod_info.hash.is_empty() {
+                if !mod_info.hash.is_empty() {
                     println!("Verifying download...");
                     let hash = &mod_info.hash[0];
                     if download::verify_checksum(&file_path, hash).await? {
                         println!("Checksum verification successful!");
                     } else {
-                        println!("Warning: Checksum verification failed!");
-                        // Optionally: delete the downloaded file
+                        println!("Error: Checksum verification failed!");
                         tokio::fs::remove_file(file_path).await?;
                         return Err("Checksum verification failed".into());
                     }
+                } else {
+                    println!("Warning: No checksum available for verification");
                 }
             } else {
                 println!("Mod '{}' not found", name);

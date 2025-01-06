@@ -1,6 +1,0 @@
-﻿- name: TestMod
-  version: 1.0.0
-  dll: TestMod.dll
-  dependencies:
-    - name: Celeste
-      version: 1.4.0.0
