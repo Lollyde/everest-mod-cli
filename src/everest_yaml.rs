@@ -5,6 +5,7 @@ use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Dependency {
+    #[serde(rename = "Name")]
     pub name: String,
     #[serde(rename = "Version")]
     pub version: Option<String>,
@@ -22,16 +23,6 @@ pub struct ModMetadata {
     pub dependencies: Option<Vec<Dependency>>,
     #[serde(rename = "OptionalDependencies")]
     pub optional_dependencies: Option<Vec<Dependency>>,
-    #[serde(rename = "LastUpdate")]
-    pub last_update: i64,
-    #[serde(rename = "xxHash", alias = "MD5")]
-    pub hash: Vec<String>,
-    #[serde(rename = "URL")]
-    pub url: String,
-    #[serde(rename = "GameBananaType")]
-    pub gamebanana_type: Option<String>,
-    #[serde(rename = "GameBananaId")]
-    pub gamebanana_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -96,11 +87,6 @@ mod tests {
         // Verify the parsed content
         assert_eq!(frog_mod.name, "FrogMod");
         assert_eq!(frog_mod.version, "1.0.0");
-        assert_eq!(frog_mod.last_update, 1728796397);
-        assert_eq!(frog_mod.gamebanana_type.as_deref(), Some("Tool"));
-        assert_eq!(frog_mod.gamebanana_id, Some(15836));
-        assert_eq!(frog_mod.hash.join(", "), "f437bf0515368130");
-        assert_eq!(frog_mod.url, "https://gamebanana.com/mmdl/1298450");
 
         Ok(())
     }
