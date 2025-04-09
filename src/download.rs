@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
-use reqwest::Client;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use crate::everest_yaml::{ModMetadata, ModMetadataList};
+use crate::mod_info::ModCatalog;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use crate::everest_yaml::{ModMetadataList, ModMetadata};
-use crate::mod_info::ModCatalog;
+use reqwest::Client;
+use std::path::{Path, PathBuf};
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use xxhash_rust::xxh64::xxh64;
 
 #[derive(Debug)]
@@ -30,11 +30,13 @@ pub struct Downloader {
 impl Downloader {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
-        let download_dir = PathBuf::from(home)
-            .join(".local/share/Steam/steamapps/common/Celeste/Mods");
-        
+        let download_dir =
+            PathBuf::from(home).join(".local/share/Steam/steamapps/common/Celeste/Mods");
+
         if !download_dir.exists() {
-            return Err("Celeste mods directory not found. Is Celeste installed through Steam?".into());
+            return Err(
+                "Celeste mods directory not found. Is Celeste installed through Steam?".into(),
+            );
         }
 
         Ok(Self {
@@ -43,7 +45,10 @@ impl Downloader {
         })
     }
 
-    pub async fn check_updates(&self, catalog: &ModCatalog) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
+    pub async fn check_updates(
+        &self,
+        catalog: &ModCatalog,
+    ) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
         let installed_mods = self.list_installed_mods().await?;
         let mut updates = Vec::new();
 
@@ -66,7 +71,11 @@ impl Downloader {
         Ok(updates)
     }
 
-    pub async fn download_mod(&self, url: &str, name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    pub async fn download_mod(
+        &self,
+        url: &str,
+        name: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let response = self.client.get(url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
 
@@ -107,7 +116,9 @@ impl Downloader {
         Ok(download_path)
     }
 
-    pub async fn list_installed_mods(&self) -> Result<Vec<InstalledMod>, Box<dyn std::error::Error>> {
+    pub async fn list_installed_mods(
+        &self,
+    ) -> Result<Vec<InstalledMod>, Box<dyn std::error::Error>> {
         let mut installed_mods = Vec::new();
 
         // Create directory if it doesn't exist
@@ -129,7 +140,11 @@ impl Downloader {
                 let mod_metadata = match ModMetadataList::from_zip(&path) {
                     Ok(list) => list.get_main_mod().cloned(),
                     Err(e) => {
-                        eprintln!("Warning: Failed to read metadata from {}: {}", path.display(), e);
+                        eprintln!(
+                            "Warning: Failed to read metadata from {}: {}",
+                            path.display(),
+                            e
+                        );
                         None
                     }
                 };
@@ -147,14 +162,17 @@ impl Downloader {
     }
 }
 
-pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> Result<bool, Box<dyn std::error::Error>> {
+pub async fn verify_checksum(
+    file_path: &Path,
+    expected_hash: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
     use tokio::io::AsyncReadExt;
 
     let mut file = fs::File::open(file_path).await?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await?;
 
-    let hash = format!("{:x}", xxh64(&buffer, 0));
+    let hash = format!("{:016x}", xxh64(&buffer, 0));
     println!("Computed hash: {}", hash);
     println!("Expected hash: {}", expected_hash);
 
@@ -166,9 +184,15 @@ fn compare_versions(ver1: &str, ver2: &str) -> std::cmp::Ordering {
     let v2_parts: Vec<&str> = ver2.split('.').collect();
 
     for i in 0..std::cmp::max(v1_parts.len(), v2_parts.len()) {
-        let n1 = v1_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-        let n2 = v2_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-        
+        let n1 = v1_parts
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let n2 = v2_parts
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+
         match n1.cmp(&n2) {
             std::cmp::Ordering::Equal => continue,
             other => return other,
