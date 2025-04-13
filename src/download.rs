@@ -167,7 +167,7 @@ pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> std::io::
     let mut reader = BufReader::new(file);
 
     let mut hasher = Xxh64::new(0);
-    let mut buffer = [0u8; 1024 * 1024]; // Read in 1MB chunks
+    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
 
     loop {
         let bytes_read = reader.read(&mut buffer).await?;
