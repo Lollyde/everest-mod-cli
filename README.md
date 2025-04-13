@@ -40,6 +40,8 @@ cd everest-mod-cli
 cargo build --release
 ```
 
+> If your CPU supports the **AVX2** feature, set the flag `RUSTFLAGS='-C target-feature=+avx2'` before building to accelerate hash calculation speed. You can check whether your CPU supports **AVX2** by running `lscpu | grep avx2`.
+
 Then symlink the binary to the local bin directory.
 
 ```sh

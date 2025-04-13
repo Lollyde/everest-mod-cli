@@ -5,8 +5,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use xxhash_rust::xxh64::xxh64;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use xxhash_rust::xxh64::Xxh64;
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -162,17 +162,23 @@ impl Downloader {
     }
 }
 
-pub async fn verify_checksum(
-    file_path: &Path,
-    expected_hash: &str,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    use tokio::io::AsyncReadExt;
+pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> std::io::Result<bool> {
+    let file = fs::File::open(file_path).await?;
+    let mut reader = BufReader::new(file);
 
-    let mut file = fs::File::open(file_path).await?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).await?;
+    let mut hasher = Xxh64::new(0);
+    let mut buffer = [0u8; 1024 * 1024]; // Read in 1MB chunks
 
-    let hash = format!("{:016x}", xxh64(&buffer, 0));
+    loop {
+        let bytes_read = reader.read(&mut buffer).await?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    let hash = format!("{:016x}", hasher.digest());
+
     println!("Computed hash: {}", hash);
     println!("Expected hash: {}", expected_hash);
 
