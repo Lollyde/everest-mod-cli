@@ -4,19 +4,17 @@
 
 A command-line interface tool for managing Celeste mods using Everest API.
 
-Currently, target **Steam** and **Linux** installation.
+Currently, target **Steam** and **Linux** installation. Flatpak version is not supported.
 
 ## Motivation
 
-Everest and Olympus are great tool to managing Celeste mods.
+Everest and Olympus are excellent tools for managing Celeste mods. However, there are still some quality-of-life improvements that could be made:
 
-However, some QoLs are missing:
+- In some countries, the download speed in the game menu is quite slow, and there's no option to accelerate it (e.g., using `aria2c`).
+- In the mod menu, there is no way to **cancel** or **pause/resume** downloads.
+- When uninstalling specific mods, it isn’t clear which *dependencies* are still needed by other mods.
 
-- The download speed in the game menu is too slow in some countries and no way to accelerate them like using `aria2c`.
-- In the mod menu of the game we can't **cancel** or **pause/resume** the download process.
-- We couldn't find out which *dependencies* are still needed by another mods when uninstall specific mods.
-
-> I found the download speed is not so slow like in-game when I using web browser or CLI tools like `curl` or `wget`. I think there might be some issues in the original `C#` codes or libraries.
+> I noticed that when using a web browser or CLI tools like `curl` or `wget`, the download speed is much faster than in-game. This suggests that there might be issues in the original code or libraries.
 
 ## Features
 
@@ -122,9 +120,9 @@ everest-mod-cli update --install
 
 ## Notes
 
-- The mod name and their filenames are not the same.
-- The mod name is the name of the mod as it appears in the game menu.
-- The filename is the name of the file that contains the mod's metadata.
+- The `mod_name` and their filenames are not the same.
+- The `mod_name` is the name of the Mod as it appears in the game menu.
+- The `filename` is the name of the file that contains the Mod's metadata.
 
 ## Credits
 
