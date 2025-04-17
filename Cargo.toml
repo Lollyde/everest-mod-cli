@@ -1,7 +1,7 @@
 [package]
 name = "everest-mod-cli"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
@@ -18,8 +18,5 @@ xxhash-rust = { version = "0.8.15", features = ["xxh64"] }
 tempfile = "3.15.0"
 
 [profile.release]
-opt-level = 'z'   # Optimize for size
 lto = true        # Enable Link Time Optimization
-codegen-units = 1 # Reduce number of codegen units to increase optimizations
-panic = 'abort'   # Abort on panic
 strip = true      # Automatically strip symbols from the binary.
