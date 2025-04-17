@@ -12,7 +12,8 @@ use xxhash_rust::xxh64::Xxh64;
 use crate::everest_yaml::{ModMetadata, ModMetadataList};
 use crate::mod_info::ModCatalog;
 
-pub const MOD_REGISTRY_URL: &str = "https://maddie480.ovh/celeste/everest_update.yaml";
+const MOD_REGISTRY_URL: &str = "https://maddie480.ovh/celeste/everest_update.yaml";
+const STEAM_MODS_DIRECTORY_PATH: &str = ".local/share/Steam/steamapps/common/Celeste/Mods";
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -20,6 +21,7 @@ pub struct UpdateInfo {
     pub current_version: String,
     pub available_version: String,
     pub url: String,
+    pub hash: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -28,16 +30,17 @@ pub struct InstalledMod {
     pub metadata: Option<ModMetadata>,
 }
 
-pub struct Downloader {
+#[derive(Debug, Clone)]
+pub struct ModDownloader {
     client: Client,
+    registry_url: String,
     download_dir: PathBuf,
 }
 
-impl Downloader {
+impl ModDownloader {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
-        let download_dir =
-            PathBuf::from(home).join(".local/share/Steam/steamapps/common/Celeste/Mods");
+        let download_dir = PathBuf::from(home).join(STEAM_MODS_DIRECTORY_PATH);
 
         if !download_dir.exists() {
             return Err(
@@ -47,12 +50,15 @@ impl Downloader {
 
         Ok(Self {
             client: Client::new(),
+            registry_url: String::from(MOD_REGISTRY_URL),
             download_dir,
         })
     }
 
+    /// Fetch remote mod registry, returns bytes of response
     pub async fn fetch_mod_registry(&self) -> Result<Bytes, reqwest::Error> {
-        let response = self.client.get(MOD_REGISTRY_URL).send().await?;
+        println!("Fetching remote mod registry...");
+        let response = self.client.get(&self.registry_url).send().await?;
         let yaml_data = response.bytes().await?;
         Ok(yaml_data)
     }
@@ -74,6 +80,7 @@ impl Downloader {
                             current_version: metadata.version,
                             available_version: available_mod.version.clone(),
                             url: available_mod.url.clone(),
+                            hash: available_mod.hash.clone(),
                         });
                     }
                 }
@@ -83,11 +90,13 @@ impl Downloader {
         Ok(updates)
     }
 
+    /// Download mod file and verify checksum
     pub async fn download_mod(
         &self,
         url: &str,
         name: &str,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        expected_hash: &[String],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let response = self.client.get(url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
 
@@ -112,20 +121,16 @@ impl Downloader {
 
         pb.finish_with_message("Download complete");
 
-        // Verify checksum if available
-        if let Some(mod_info) = ModCatalog::fetch_from_network().await?.get_mod(name) {
-            if !mod_info.hash.is_empty() {
-                let expected_hash = &mod_info.hash[0];
-                if verify_checksum(&download_path, expected_hash).await? {
-                    println!("Checksum verification successful");
-                } else {
-                    fs::remove_file(&download_path).await?;
-                    return Err("Checksum verification failed".into());
-                }
-            }
+        // Verify checksum
+        let hash = hash_file(&download_path).await?;
+        if expected_hash.contains(&hash) {
+            println!("Checksum verified");
+        } else {
+            fs::remove_file(&download_path).await?;
+            return Err("Checksum verification failed".into());
         }
 
-        Ok(download_path)
+        Ok(())
     }
 
     pub async fn list_installed_mods(
@@ -174,6 +179,7 @@ impl Downloader {
     }
 }
 
+/// Compute xxhash of given file, return hexadicimal string
 pub async fn hash_file(file_path: &Path) -> std::io::Result<String> {
     let file = fs::File::open(file_path).await?;
     let mut reader = BufReader::new(file);
@@ -190,29 +196,6 @@ pub async fn hash_file(file_path: &Path) -> std::io::Result<String> {
     }
 
     Ok(format!("{:016x}", hasher.digest()))
-}
-
-pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> std::io::Result<bool> {
-    let file = fs::File::open(file_path).await?;
-    let mut reader = BufReader::new(file);
-
-    let mut hasher = Xxh64::new(0);
-    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
-
-    loop {
-        let bytes_read = reader.read(&mut buffer).await?;
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-
-    let hash = format!("{:016x}", hasher.digest());
-
-    println!("Computed hash: {}", hash);
-    println!("Expected hash: {}", expected_hash);
-
-    Ok(hash == expected_hash.to_lowercase())
 }
 
 fn compare_versions(ver1: &str, ver2: &str) -> std::cmp::Ordering {

@@ -1,8 +1,5 @@
 use bytes::Bytes;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
-
-const MOD_LIST_URL: &str = "https://everestapi.github.io/modupdater.txt";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RemoteModInfo {
@@ -22,22 +19,6 @@ pub struct RemoteModInfo {
     pub gamebanana_id: Option<i32>,
 }
 
-impl RemoteModInfo {
-    /// Checks if the provided hash matches any of the expected checksums.
-    ///
-    /// # Arguments
-    ///
-    /// * `computed_hash` - The hash to check against the mod's checksums.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if the hash matches any of the checksums, otherwise `false`.
-    pub fn has_matching_hash(&self, computed_hash: &String) -> bool {
-        // Check if the computed hash exists in the list of expected checksums
-        self.hash.contains(computed_hash)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ModCatalog {
     #[serde(flatten)]
@@ -47,34 +28,6 @@ pub struct ModCatalog {
 impl ModCatalog {
     pub async fn new(data: Bytes) -> Result<Self, serde_yaml_ng::Error> {
         let mut catalog: Self = serde_yaml_ng::from_slice(&data)?;
-
-        // Set the name field for each ModInfo
-        for (key, mod_info) in catalog.mods.iter_mut() {
-            mod_info.name = key.clone();
-        }
-
-        Ok(catalog)
-    }
-
-    pub async fn fetch_from_network() -> Result<Self, Box<dyn std::error::Error>> {
-        let client = Client::new();
-
-        // First, fetch the URL of the YAML file
-        let yaml_url = client
-            .get(MOD_LIST_URL)
-            .send()
-            .await?
-            .text()
-            .await?
-            .trim()
-            .to_string();
-
-        println!("Fetching mod list from: {}", yaml_url);
-
-        // Then fetch the actual YAML content
-        let yaml_content = client.get(&yaml_url).send().await?.text().await?;
-
-        let mut catalog: ModCatalog = serde_yaml_ng::from_str(&yaml_content)?;
 
         // Set the name field for each ModInfo
         for (key, mod_info) in catalog.mods.iter_mut() {
