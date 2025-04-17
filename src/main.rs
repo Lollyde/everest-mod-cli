@@ -72,7 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // For remaining commands, load the mod catalog from the network
         _ => {
-            let catalog = ModCatalog::fetch_from_network().await?;
+            let mod_registry = downloader.fetch_mod_registry().await?;
+            let catalog = ModCatalog::new(mod_registry).await?;
 
             match &cli.command {
                 Commands::Search(args) => {

@@ -1,12 +1,18 @@
-use crate::everest_yaml::{ModMetadata, ModMetadataList};
-use crate::mod_info::ModCatalog;
+use bytes::Bytes;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use std::path::{Path, PathBuf};
-use tokio::fs;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::{
+    fs,
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+};
 use xxhash_rust::xxh64::Xxh64;
+
+use crate::everest_yaml::{ModMetadata, ModMetadataList};
+use crate::mod_info::ModCatalog;
+
+pub const MOD_REGISTRY_URL: &str = "https://maddie480.ovh/celeste/everest_update.yaml";
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -43,6 +49,12 @@ impl Downloader {
             client: Client::new(),
             download_dir,
         })
+    }
+
+    pub async fn fetch_mod_registry(&self) -> Result<Bytes, reqwest::Error> {
+        let response = self.client.get(MOD_REGISTRY_URL).send().await?;
+        let yaml_data = response.bytes().await?;
+        Ok(yaml_data)
     }
 
     pub async fn check_updates(
@@ -160,6 +172,24 @@ impl Downloader {
         installed_mods.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(installed_mods)
     }
+}
+
+pub async fn hash_file(file_path: &Path) -> std::io::Result<String> {
+    let file = fs::File::open(file_path).await?;
+    let mut reader = BufReader::new(file);
+
+    let mut hasher = Xxh64::new(0);
+    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
+
+    loop {
+        let bytes_read = reader.read(&mut buffer).await?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(format!("{:016x}", hasher.digest()))
 }
 
 pub async fn verify_checksum(file_path: &Path, expected_hash: &str) -> std::io::Result<bool> {
