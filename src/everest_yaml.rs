@@ -42,7 +42,7 @@ impl ModMetadataList {
             contents = contents[3..].to_string(); // BOM has 3 bytes
         }
 
-        let metadata: Vec<ModMetadata> = serde_yaml::from_str(&contents)?;
+        let metadata: Vec<ModMetadata> = serde_yaml_ng::from_str(&contents)?;
         Ok(ModMetadataList(metadata))
     }
 

@@ -46,7 +46,7 @@ impl ModCatalog {
         // Then fetch the actual YAML content
         let yaml_content = client.get(&yaml_url).send().await?.text().await?;
 
-        let mut catalog: ModCatalog = serde_yaml::from_str(&yaml_content)?;
+        let mut catalog: ModCatalog = serde_yaml_ng::from_str(&yaml_content)?;
 
         // Set the name field for each ModInfo
         for (key, mod_info) in catalog.mods.iter_mut() {
@@ -119,7 +119,7 @@ mod tests {
                 broken structure
         "#;
 
-        let result: Result<ModCatalog, _> = serde_yaml::from_str(invalid_yaml);
+        let result: Result<ModCatalog, _> = serde_yaml_ng::from_str(invalid_yaml);
         assert!(result.is_err());
     }
 
@@ -131,7 +131,7 @@ mod tests {
               # Missing required fields like version, URL, etc.
         "#;
 
-        let result: Result<ModCatalog, _> = serde_yaml::from_str(incomplete_yaml);
+        let result: Result<ModCatalog, _> = serde_yaml_ng::from_str(incomplete_yaml);
         assert!(result.is_err());
     }
 }
