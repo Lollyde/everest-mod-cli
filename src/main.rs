@@ -6,7 +6,7 @@ mod everest_yaml;
 mod mod_info;
 
 use cli::{Cli, Commands};
-use download::Downloader;
+use download::ModDownloader;
 use mod_info::ModCatalog;
 
 #[tokio::main]
@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     // Initialize downloader early for list and update commands
-    let downloader = Downloader::new()?;
+    let downloader = ModDownloader::new()?;
 
     match &cli.command {
         Commands::List => {
@@ -72,7 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // For remaining commands, load the mod catalog from the network
         _ => {
-            let catalog = ModCatalog::fetch_from_network().await?;
+            let mod_registry = downloader.fetch_mod_registry().await?;
+            let catalog = ModCatalog::new(mod_registry).await?;
 
             match &cli.command {
                 Commands::Search(args) => {
@@ -101,22 +102,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Commands::Install(args) => {
                     if let Some(mod_info) = catalog.get_mod(&args.name) {
-                        let file_path = downloader
-                            .download_mod(&mod_info.url, &mod_info.name)
+                        downloader
+                            .download_mod(&mod_info.url, &mod_info.name, &mod_info.hash)
                             .await?;
-                        if !mod_info.hash.is_empty() {
-                            println!("Verifying download...");
-                            let hash = &mod_info.hash[0];
-                            if download::verify_checksum(&file_path, hash).await? {
-                                println!("Checksum verification successful!");
-                            } else {
-                                println!("Error: Checksum verification failed!");
-                                tokio::fs::remove_file(file_path).await?;
-                                return Err("Checksum verification failed".into());
-                            }
-                        } else {
-                            println!("Warning: No checksum available for verification");
-                        }
                     } else {
                         println!("Mod '{}' not found", args.name);
                     }
@@ -136,8 +124,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("\nInstalling updates...");
                             for update in updates {
                                 println!("\nUpdating {}...", update.name);
-                                let _file_path =
-                                    downloader.download_mod(&update.url, &update.name).await?;
+                                downloader
+                                    .download_mod(&update.url, &update.name, &update.hash)
+                                    .await?;
                                 println!(
                                     "Updated {} to version {}",
                                     update.name, update.available_version
