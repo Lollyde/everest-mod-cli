@@ -1,10 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "everest-mod-cli")]
-#[command(version = "0.1.0")]
-#[command(author = "<pinpinroku pinpinroku11600@tutanota.com>")]
-#[command(about = "Celeste mod management CLI", long_about = None)]
+#[command(version, about = "Mod management tool for Celeste", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,

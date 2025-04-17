@@ -2,6 +2,11 @@
 name = "everest-mod-cli"
 version = "0.1.0"
 edition = "2024"
+description = "A simple cli tool to manage mods for Celeste."
+authors = ["pinpinroku <pinpinroku11600@tutanota.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/pinpinroku/everest-mod-cli"
 
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
