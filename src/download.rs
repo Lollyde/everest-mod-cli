@@ -10,7 +10,7 @@ use tokio::{
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::everest_yaml::{ModMetadata, ModMetadataList};
-use crate::mod_info::ModCatalog;
+use crate::mod_registry::ModRegistry;
 
 const MOD_REGISTRY_URL: &str = "https://maddie480.ovh/celeste/everest_update.yaml";
 const STEAM_MODS_DIRECTORY_PATH: &str = ".local/share/Steam/steamapps/common/Celeste/Mods";
@@ -65,22 +65,22 @@ impl ModDownloader {
 
     pub async fn check_updates(
         &self,
-        catalog: &ModCatalog,
+        mod_registry: &ModRegistry,
     ) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
         let installed_mods = self.list_installed_mods().await?;
         let mut updates = Vec::new();
 
         for installed_mod in installed_mods {
             if let Some(metadata) = installed_mod.metadata {
-                if let Some(available_mod) = catalog.get_mod(&metadata.name) {
+                if let Some(available_mod) = mod_registry.get_mod_info(&metadata.name) {
                     // Compare versions
                     if compare_versions(&available_mod.version, &metadata.version).is_gt() {
                         updates.push(UpdateInfo {
                             name: metadata.name,
                             current_version: metadata.version,
                             available_version: available_mod.version.clone(),
-                            url: available_mod.url.clone(),
-                            hash: available_mod.hash.clone(),
+                            url: available_mod.download_url.clone(),
+                            hash: available_mod.checksums.clone(),
                         });
                     }
                 }

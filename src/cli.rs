@@ -11,7 +11,7 @@ pub struct Cli {
 pub enum Commands {
     /// Search for mods
     Search(SearchArgs),
-    /// Show mod information from the remote catalog
+    /// Show mod information from the remote mod registry
     Info(InfoArgs),
     /// Install a mod
     Install(InstallArgs),
