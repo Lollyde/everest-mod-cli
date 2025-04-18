@@ -11,13 +11,13 @@ Currently, target **Steam** and **Linux** installation. Flatpak version is not s
 - [x] `ModCatalog::fetch_from_network()` is being called twice in some operations
 - [ ] Version comparison is not meaningful. The value might contain a nonsensical string instead of a number. Additionally, modders might not increment the version number. It would be better to compare the xxhash of the files
 - [ ] The downloading tasks are not running concurrently, even though the process is optimized
-- [ ] The list command displays the basename of the filename, instead of the actual mod name
+- [x] The list command displays the basename of the filename, instead of the actual mod name
 - [ ] The `LastUpdate` value is not in a human-readable format
 
 ## TODO
 
 - [ ] Implement logger
-- [ ] Implement custom errors
+- [x] Implement custom errors
 - [x] Implement `fetch_mod_registry()` in `Downloader` struct instead of using `ModCatalog::fetch_from_network()`
 - [x] Implement `has_matching_hash()` instead of version comparison
 - [ ] Fix concurrent downloading by using `tokio::spawn`

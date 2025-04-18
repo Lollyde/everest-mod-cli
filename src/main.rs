@@ -1,8 +1,11 @@
 use clap::Parser;
 
 mod cli;
+mod constant;
 mod download;
-mod everest_yaml;
+mod error;
+mod fileutil;
+mod installed_mods;
 mod mod_registry;
 
 use cli::{Cli, Commands};
@@ -14,11 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     // Initialize downloader early for list and update commands
-    let downloader = ModDownloader::new()?;
+    let downloader = ModDownloader::new();
 
     match &cli.command {
         Commands::List => {
-            let installed_mods = downloader.list_installed_mods().await?;
+            let installed_mods = downloader.list_installed_mods()?;
             if installed_mods.is_empty() {
                 println!("No mods installed");
                 return Ok(());
@@ -26,45 +29,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Installed mods:");
             for mod_info in installed_mods {
-                if let Some(metadata) = mod_info.metadata {
-                    println!("  {} v{}", mod_info.name, metadata.version);
-                } else {
-                    println!("  {} (no metadata)", mod_info.name);
-                }
+                println!("    {} v{}", mod_info.mod_name, mod_info.version);
             }
         }
 
         Commands::Show(args) => {
-            let installed_mods = downloader.list_installed_mods().await?;
-            if let Some(mod_info) = installed_mods.iter().find(|m| m.name == args.name) {
-                if let Some(metadata) = &mod_info.metadata {
-                    println!("Name: {}", mod_info.name);
-                    println!("Version: {}", metadata.version);
-
-                    if let Some(deps) = &metadata.dependencies {
-                        println!("\nDependencies:");
-                        for dep in deps {
-                            if let Some(ver) = &dep.version {
-                                println!("  - {} v{}", dep.name, ver);
-                            } else {
-                                println!("  - {}", dep.name);
-                            }
-                        }
-                    }
-
-                    if let Some(opt_deps) = &metadata.optional_dependencies {
-                        println!("\nOptional Dependencies:");
-                        for dep in opt_deps {
-                            if let Some(ver) = &dep.version {
-                                println!("  - {} v{}", dep.name, ver);
-                            } else {
-                                println!("  - {}", dep.name);
-                            }
-                        }
-                    }
-                } else {
-                    println!("No metadata available for mod '{}'", args.name);
-                }
+            let installed_mods = downloader.list_installed_mods()?;
+            if let Some(mod_info) = installed_mods.iter().find(|m| m.mod_name == args.name) {
+                println!("Name: {}", mod_info.mod_name);
+                println!("Version: {}", mod_info.version);
             } else {
                 println!("Mod '{}' is not installed", args.name);
             }
