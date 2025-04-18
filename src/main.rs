@@ -71,16 +71,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // For remaining commands, fetch the remote mod registry
-        // For remaining commands, fetch the remote mod registry
         _ => {
-            let mod_registry_data = downloader.fetch_mod_registry().await?;
-            let mod_registry = ModRegistry::from(mod_registry_data).await?;
             let mod_registry_data = downloader.fetch_mod_registry().await?;
             let mod_registry = ModRegistry::from(mod_registry_data).await?;
 
             match &cli.command {
                 Commands::Search(args) => {
-                    let results = mod_registry.search(&args.query);
                     let results = mod_registry.search(&args.query);
                     if results.is_empty() {
                         println!("No mods found matching '{}'", args.query);
@@ -90,22 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("\n{} (v{})", mod_info.name, mod_info.version);
                             println!("  Last updated: {}", mod_info.updated_at);
                             println!("  URL: {}", mod_info.download_url);
-                            println!("  Last updated: {}", mod_info.updated_at);
-                            println!("  URL: {}", mod_info.download_url);
                         }
                     }
                 }
                 Commands::Info(args) => {
                     if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
-                    if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
                         println!("{} (v{})", mod_info.name, mod_info.version);
-                        println!("Last updated: {}", mod_info.updated_at);
-                        println!("Download link: {}", mod_info.download_url);
-                        println!(
-                            "Page URL: https://gamebanana.com/mods/{}",
-                            mod_info.gamebanana_id
-                        );
-                        println!("Hashes: {}", mod_info.checksums.join(", "));
                         println!("Last updated: {}", mod_info.updated_at);
                         println!("Download link: {}", mod_info.download_url);
                         println!(
@@ -119,13 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Commands::Install(args) => {
                     if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
-                    if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
                         downloader
-                            .download_mod(
-                                &mod_info.download_url,
-                                &mod_info.name,
-                                &mod_info.checksums,
-                            )
                             .download_mod(
                                 &mod_info.download_url,
                                 &mod_info.name,
@@ -137,7 +117,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Commands::Update(args) => {
-                    let updates = downloader.check_updates(&mod_registry).await?;
                     let updates = downloader.check_updates(&mod_registry).await?;
                     if updates.is_empty() {
                         println!("All mods are up to date!");
