@@ -80,7 +80,7 @@ everest-mod-cli search "GDDH"
 #
 # GDDH (v1.0.3)
 #  Last updated: 1718743274
-#  URL: https://gamebanana.com/mmdl/1218505
+#  Download link: https://gamebanana.com/mmdl/1218505
 ```
 
 ### `info <mod_name>`
@@ -90,9 +90,9 @@ everest-mod-cli info "SpringCollab2020"
 # Fetching remote mod registry...
 # SpringCollab2020 (v1.7.9)
 # Last updated: 1725474405
-# URL: https://gamebanana.com/mmdl/1273559
-# GameBanana ID: Some(150813)
-# Hash: e944c53a9a64f7e8
+# Download link: https://gamebanana.com/mmdl/1273559
+# Page URL: https://gamebanana.com/mods/584862
+# Hashes: e944c53a9a64f7e8
 ```
 
 ### `install <mod_name>`

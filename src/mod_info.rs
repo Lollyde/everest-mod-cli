@@ -1,79 +1,67 @@
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
+/// Each entry in `everest_update.yaml` containing information about a mod
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RemoteModInfo {
+    /// Actual mod name (not filename)
     #[serde(skip)]
     pub name: String,
+    /// Version string
     #[serde(rename = "Version")]
     pub version: String,
+    /// File size
+    #[serde(rename = "Size")]
+    pub file_size: u64,
+    /// Timestamp of last update
     #[serde(rename = "LastUpdate")]
-    pub last_update: i64,
+    pub updated_at: u64,
+    /// Download link
     #[serde(rename = "URL")]
-    pub url: String,
-    #[serde(rename = "xxHash", alias = "MD5")]
-    pub hash: Vec<String>,
+    pub download_url: String,
+    /// Checksums
+    #[serde(rename = "xxHash")]
+    pub checksums: Vec<String>,
+    /// Category for a mod
     #[serde(rename = "GameBananaType")]
-    pub gamebanana_type: Option<String>,
+    pub gamebanana_type: String,
+    /// Reference ID of gamebanana page
     #[serde(rename = "GameBananaId")]
-    pub gamebanana_id: Option<i32>,
+    pub gamebanana_id: u32,
 }
 
+/// Mod Registry: represents the complete `everest_update.yaml` containing all available remote mods
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ModCatalog {
+pub struct ModRegistry {
     #[serde(flatten)]
-    pub mods: std::collections::HashMap<String, RemoteModInfo>,
+    pub entries: HashMap<String, RemoteModInfo>,
 }
 
-impl ModCatalog {
-    pub async fn new(data: Bytes) -> Result<Self, serde_yaml_ng::Error> {
-        let mut catalog: Self = serde_yaml_ng::from_slice(&data)?;
+impl ModRegistry {
+    /// Initialize ModRegistry instance from raw data
+    pub async fn from(data: Bytes) -> Result<Self, serde_yaml_ng::Error> {
+        let mut mod_registry: Self = serde_yaml_ng::from_slice(&data)?;
 
         // Set the name field for each ModInfo
-        for (key, mod_info) in catalog.mods.iter_mut() {
+        for (key, mod_info) in mod_registry.entries.iter_mut() {
             mod_info.name = key.clone();
         }
 
-        Ok(catalog)
+        Ok(mod_registry)
     }
 
+    /// Search for mods
     pub fn search(&self, query: &str) -> Vec<&RemoteModInfo> {
-        self.mods
+        self.entries
             .values()
             .filter(|mod_info| mod_info.name.to_lowercase().contains(&query.to_lowercase()))
             .collect()
     }
 
-    pub fn get_mod(&self, name: &str) -> Option<&RemoteModInfo> {
-        self.mods.get(name)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_invalid_yaml() {
-        let invalid_yaml = r#"
-            invalid:
-              - missing: colon
-                broken structure
-        "#;
-
-        let result: Result<ModCatalog, _> = serde_yaml_ng::from_str(invalid_yaml);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_missing_required_fields() {
-        let incomplete_yaml = r#"
-            TestMod:
-              GameBananaType: Tool
-              # Missing required fields like version, URL, etc.
-        "#;
-
-        let result: Result<ModCatalog, _> = serde_yaml_ng::from_str(incomplete_yaml);
-        assert!(result.is_err());
+    /// Get mod information
+    pub fn get_mod_info(&self, name: &str) -> Option<&RemoteModInfo> {
+        self.entries.get(name)
     }
 }

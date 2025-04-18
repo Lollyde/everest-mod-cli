@@ -7,7 +7,7 @@ mod mod_info;
 
 use cli::{Cli, Commands};
 use download::ModDownloader;
-use mod_info::ModCatalog;
+use mod_info::ModRegistry;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -70,47 +70,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // For remaining commands, load the mod catalog from the network
+        // For remaining commands, fetch the remote mod registry
         _ => {
-            let mod_registry = downloader.fetch_mod_registry().await?;
-            let catalog = ModCatalog::new(mod_registry).await?;
+            let mod_registry_data = downloader.fetch_mod_registry().await?;
+            let mod_registry = ModRegistry::from(mod_registry_data).await?;
 
             match &cli.command {
                 Commands::Search(args) => {
-                    let results = catalog.search(&args.query);
+                    let results = mod_registry.search(&args.query);
                     if results.is_empty() {
                         println!("No mods found matching '{}'", args.query);
                     } else {
                         println!("Found {} matching mods:", results.len());
                         for mod_info in results {
                             println!("\n{} (v{})", mod_info.name, mod_info.version);
-                            println!("  Last updated: {}", mod_info.last_update);
-                            println!("  URL: {}", mod_info.url);
+                            println!("  Last updated: {}", mod_info.updated_at);
+                            println!("  URL: {}", mod_info.download_url);
                         }
                     }
                 }
                 Commands::Info(args) => {
-                    if let Some(mod_info) = catalog.get_mod(&args.name) {
+                    if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
                         println!("{} (v{})", mod_info.name, mod_info.version);
-                        println!("Last updated: {}", mod_info.last_update);
-                        println!("URL: {}", mod_info.url);
-                        println!("GameBanana ID: {:?}", mod_info.gamebanana_id);
-                        println!("Hash: {}", mod_info.hash.join(", "));
+                        println!("Last updated: {}", mod_info.updated_at);
+                        println!("Download link: {}", mod_info.download_url);
+                        println!(
+                            "Page URL: https://gamebanana.com/mods/{}",
+                            mod_info.gamebanana_id
+                        );
+                        println!("Hashes: {}", mod_info.checksums.join(", "));
                     } else {
                         println!("Mod '{}' not found", args.name);
                     }
                 }
                 Commands::Install(args) => {
-                    if let Some(mod_info) = catalog.get_mod(&args.name) {
+                    if let Some(mod_info) = mod_registry.get_mod_info(&args.name) {
                         downloader
-                            .download_mod(&mod_info.url, &mod_info.name, &mod_info.hash)
+                            .download_mod(
+                                &mod_info.download_url,
+                                &mod_info.name,
+                                &mod_info.checksums,
+                            )
                             .await?;
                     } else {
                         println!("Mod '{}' not found", args.name);
                     }
                 }
                 Commands::Update(args) => {
-                    let updates = downloader.check_updates(&catalog).await?;
+                    let updates = downloader.check_updates(&mod_registry).await?;
                     if updates.is_empty() {
                         println!("All mods are up to date!");
                     } else {
