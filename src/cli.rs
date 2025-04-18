@@ -1,13 +1,13 @@
 use clap::{Args, Parser, Subcommand};
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(version, about = "Mod management tool for Celeste", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Search for mods
     Search(SearchArgs),
@@ -23,31 +23,31 @@ pub enum Commands {
     Update(UpdateArgs),
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct SearchArgs {
     /// Search query
     pub query: String,
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct InfoArgs {
     /// Mod name
     pub name: String,
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct InstallArgs {
     /// Mod name
     pub name: String,
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct ShowArgs {
     /// Mod name
     pub name: String,
 }
 
-#[derive(Args)]
+#[derive(Debug, Args)]
 pub struct UpdateArgs {
     /// Install available updates
     #[arg(long, action)]

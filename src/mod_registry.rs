@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 /// Each entry in `everest_update.yaml` containing information about a mod
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -54,6 +55,7 @@ impl ModRegistry {
 
     /// Search for mods
     pub fn search(&self, query: &str) -> Vec<&RemoteModInfo> {
+        info!("Searching '{}'", query);
         self.entries
             .values()
             .filter(|mod_info| mod_info.name.to_lowercase().contains(&query.to_lowercase()))
@@ -62,6 +64,7 @@ impl ModRegistry {
 
     /// Get mod information
     pub fn get_mod_info(&self, name: &str) -> Option<&RemoteModInfo> {
+        info!("Get mod '{}' from registry", name);
         self.entries.get(name)
     }
 }

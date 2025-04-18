@@ -10,6 +10,7 @@ use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
+use tracing::{info, warn};
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::{
@@ -89,8 +90,10 @@ impl ModDownloader {
         name: &str,
         expected_hash: &[String],
     ) -> Result<(), Error> {
-        let response = self.client.get(url).send().await?;
+        println!("Start downloading mod...");
+        let response = self.client.get(url).send().await?.error_for_status()?;
         let total_size = response.content_length().unwrap_or(0);
+        info!("File size: {}", total_size);
 
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()
@@ -100,6 +103,7 @@ impl ModDownloader {
 
         let mut stream = response.bytes_stream();
         let download_path = self.download_dir.join(format!("{}.zip", name));
+        info!("Path to download: {}", download_path.display());
         let mut file = fs::File::create(&download_path).await?;
         let mut downloaded: u64 = 0;
 
@@ -114,7 +118,9 @@ impl ModDownloader {
         pb.finish_with_message("Download complete");
 
         // Verify checksum
+        println!("Computing file hash...");
         let hash = async_hash_file(&download_path).await?;
+        info!("Computed xxhash of downloaded file: {}", hash);
         if expected_hash.contains(&hash) {
             println!("Checksum verified");
         } else {
@@ -143,7 +149,7 @@ impl ModDownloader {
                     let local_mod = LocalModInfo::new(archive_path, manifest, checksum);
                     installed_mods.push(local_mod);
                 }
-                None => println!(
+                None => warn!(
                     "No mod manifest file (everest.yaml) found in {}.\n\
                         #  The file might be named 'everest.yml' or located in a subdirectory.\n\
                         # Please contact the mod creator about this issue.\n\

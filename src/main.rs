@@ -11,10 +11,24 @@ mod mod_registry;
 use cli::{Cli, Commands};
 use download::ModDownloader;
 use mod_registry::ModRegistry;
+use tracing::{debug, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .compact()
+        .with_max_level(tracing::Level::ERROR)
+        .with_file(false)
+        .with_line_number(false)
+        .with_thread_ids(false)
+        .with_target(false)
+        .without_time()
+        .init();
+
+    info!("Application starts");
+
     let cli = Cli::parse();
+    debug!("Command passed: {:#?}", &cli.command);
 
     // Initialize downloader early for list and update commands
     let downloader = ModDownloader::new();
@@ -27,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
 
-            println!("Installed mods:");
+            println!("Installed mods ({}):", installed_mods.len());
             for mod_info in installed_mods {
                 println!("    {} v{}", mod_info.mod_name, mod_info.version);
             }
