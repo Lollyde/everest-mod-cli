@@ -66,6 +66,7 @@ impl ModDownloader {
     pub async fn check_updates(
         &self,
         mod_registry: &ModRegistry,
+        mod_registry: &ModRegistry,
     ) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
         let installed_mods = self.list_installed_mods().await?;
         let mut updates = Vec::new();
@@ -73,12 +74,15 @@ impl ModDownloader {
         for installed_mod in installed_mods {
             if let Some(metadata) = installed_mod.metadata {
                 if let Some(available_mod) = mod_registry.get_mod_info(&metadata.name) {
+                if let Some(available_mod) = mod_registry.get_mod_info(&metadata.name) {
                     // Compare versions
                     if compare_versions(&available_mod.version, &metadata.version).is_gt() {
                         updates.push(UpdateInfo {
                             name: metadata.name,
                             current_version: metadata.version,
                             available_version: available_mod.version.clone(),
+                            url: available_mod.download_url.clone(),
+                            hash: available_mod.checksums.clone(),
                             url: available_mod.download_url.clone(),
                             hash: available_mod.checksums.clone(),
                         });
