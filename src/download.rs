@@ -2,18 +2,23 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
-use std::path::{Path, PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
 use xxhash_rust::xxh64::Xxh64;
 
-use crate::everest_yaml::{ModMetadata, ModMetadataList};
-use crate::mod_registry::ModRegistry;
-
-const MOD_REGISTRY_URL: &str = "https://maddie480.ovh/celeste/everest_update.yaml";
-const STEAM_MODS_DIRECTORY_PATH: &str = ".local/share/Steam/steamapps/common/Celeste/Mods";
+use crate::{
+    constant::MOD_REGISTRY_URL,
+    error::Error,
+    fileutil::{find_installed_mod_archives, get_mods_directory, read_manifest_file_from_zip},
+    installed_mods::{InstalledModList, LocalModInfo, ModManifest},
+    mod_registry::ModRegistry,
+};
 
 #[derive(Debug)]
 pub struct UpdateInfo {
@@ -24,12 +29,7 @@ pub struct UpdateInfo {
     pub hash: Vec<String>,
 }
 
-#[derive(Debug)]
-pub struct InstalledMod {
-    pub name: String,
-    pub metadata: Option<ModMetadata>,
-}
-
+/// Manage mod downloads
 #[derive(Debug, Clone)]
 pub struct ModDownloader {
     client: Client,
@@ -38,51 +38,43 @@ pub struct ModDownloader {
 }
 
 impl ModDownloader {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
-        let download_dir = PathBuf::from(home).join(STEAM_MODS_DIRECTORY_PATH);
+    pub fn new() -> Self {
+        let download_dir = get_mods_directory();
 
-        if !download_dir.exists() {
-            return Err(
-                "Celeste mods directory not found. Is Celeste installed through Steam?".into(),
-            );
-        }
-
-        Ok(Self {
+        Self {
             client: Client::new(),
             registry_url: String::from(MOD_REGISTRY_URL),
             download_dir,
-        })
+        }
     }
 
     /// Fetch remote mod registry, returns bytes of response
-    pub async fn fetch_mod_registry(&self) -> Result<Bytes, reqwest::Error> {
+    pub async fn fetch_mod_registry(&self) -> Result<Bytes, Error> {
         println!("Fetching remote mod registry...");
         let response = self.client.get(&self.registry_url).send().await?;
         let yaml_data = response.bytes().await?;
         Ok(yaml_data)
     }
 
+    // TODO: change logic to hash comparison
     pub async fn check_updates(
         &self,
         mod_registry: &ModRegistry,
     ) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
-        let installed_mods = self.list_installed_mods().await?;
+        let installed_mods = self.list_installed_mods()?;
         let mut updates = Vec::new();
 
         for installed_mod in installed_mods {
-            if let Some(metadata) = installed_mod.metadata {
-                if let Some(available_mod) = mod_registry.get_mod_info(&metadata.name) {
-                    // Compare versions
-                    if compare_versions(&available_mod.version, &metadata.version).is_gt() {
-                        updates.push(UpdateInfo {
-                            name: metadata.name,
-                            current_version: metadata.version,
-                            available_version: available_mod.version.clone(),
-                            url: available_mod.download_url.clone(),
-                            hash: available_mod.checksums.clone(),
-                        });
-                    }
+            if let Some(available_mod) = mod_registry.get_mod_info(&installed_mod.mod_name) {
+                // Compare versions
+                if compare_versions(&available_mod.version, &installed_mod.version).is_gt() {
+                    updates.push(UpdateInfo {
+                        name: installed_mod.mod_name,
+                        current_version: installed_mod.version,
+                        available_version: available_mod.version.clone(),
+                        url: available_mod.download_url.clone(),
+                        hash: available_mod.checksums.clone(),
+                    });
                 }
             }
         }
@@ -96,7 +88,7 @@ impl ModDownloader {
         url: &str,
         name: &str,
         expected_hash: &[String],
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Error> {
         let response = self.client.get(url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
 
@@ -122,71 +114,57 @@ impl ModDownloader {
         pb.finish_with_message("Download complete");
 
         // Verify checksum
-        let hash = hash_file(&download_path).await?;
+        let hash = async_hash_file(&download_path).await?;
         if expected_hash.contains(&hash) {
             println!("Checksum verified");
         } else {
             fs::remove_file(&download_path).await?;
-            return Err("Checksum verification failed".into());
+            return Err(Error::InvalidChecksum {
+                file: download_path,
+                computed: hash,
+                expected: expected_hash.to_vec(),
+            });
         }
 
         Ok(())
     }
 
-    pub async fn list_installed_mods(
-        &self,
-    ) -> Result<Vec<InstalledMod>, Box<dyn std::error::Error>> {
-        let mut installed_mods = Vec::new();
+    /// List installed mods which has valid manifest file
+    pub fn list_installed_mods(&self) -> Result<InstalledModList, Error> {
+        let archive_paths = find_installed_mod_archives(&self.download_dir)?;
+        let mut installed_mods = Vec::with_capacity(archive_paths.len());
 
-        // Create directory if it doesn't exist
-        if !self.download_dir.exists() {
-            return Ok(installed_mods);
-        }
-
-        let mut entries = fs::read_dir(&self.download_dir).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("zip") {
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-
-                // Try to read everest.yaml from the zip
-                let mod_metadata = match ModMetadataList::from_zip(&path) {
-                    Ok(list) => list.get_main_mod().cloned(),
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to read metadata from {}: {}",
-                            path.display(),
-                            e
-                        );
-                        None
-                    }
-                };
-
-                installed_mods.push(InstalledMod {
-                    name,
-                    metadata: mod_metadata,
-                });
+        for archive_path in archive_paths {
+            let manifest_content = read_manifest_file_from_zip(&archive_path)?;
+            match manifest_content {
+                Some(content) => {
+                    let checksum = sync_hash_file(&archive_path)?;
+                    let manifest = ModManifest::parse_mod_manifest_from_yaml(&content)?;
+                    let local_mod = LocalModInfo::new(archive_path, manifest, checksum);
+                    installed_mods.push(local_mod);
+                }
+                None => println!(
+                    "No mod manifest file (everest.yaml) found in {}.\n\
+                        #  The file might be named 'everest.yml' or located in a subdirectory.\n\
+                        # Please contact the mod creator about this issue.\n\
+                        # Updates will be skipped for this mod.\n",
+                    archive_path.display()
+                ),
             }
         }
 
         // Sort by name
-        installed_mods.sort_by(|a, b| a.name.cmp(&b.name));
+        installed_mods.sort_by(|a, b| a.mod_name.cmp(&b.mod_name));
         Ok(installed_mods)
     }
 }
 
-/// Compute xxhash of given file, return hexadicimal string
-pub async fn hash_file(file_path: &Path) -> std::io::Result<String> {
+/// Compute xxhash of a given file, return hexadicimal string (async version)
+pub async fn async_hash_file(file_path: &Path) -> Result<String, Error> {
     let file = fs::File::open(file_path).await?;
     let mut reader = BufReader::new(file);
-
     let mut hasher = Xxh64::new(0);
     let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
-
     loop {
         let bytes_read = reader.read(&mut buffer).await?;
         if bytes_read == 0 {
@@ -194,10 +172,28 @@ pub async fn hash_file(file_path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buffer[..bytes_read]);
     }
-
-    Ok(format!("{:016x}", hasher.digest()))
+    let hash_str = format!("{:016x}", hasher.digest());
+    Ok(hash_str)
 }
 
+/// Compute xxhash of a given file, return hexadicimal string (sync version)
+pub fn sync_hash_file(file_path: &Path) -> Result<String, Error> {
+    let file = std::fs::File::open(file_path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut hasher = Xxh64::new(0);
+    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    let hash_str = format!("{:016x}", hasher.digest());
+    Ok(hash_str)
+}
+
+// TODO: make this hash comparison
 fn compare_versions(ver1: &str, ver2: &str) -> std::cmp::Ordering {
     let v1_parts: Vec<&str> = ver1.split('.').collect();
     let v2_parts: Vec<&str> = ver2.split('.').collect();
