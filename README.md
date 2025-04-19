@@ -16,11 +16,12 @@ Currently, target **Steam** and **Linux** installation. Flatpak version is not s
 
 ## TODO
 
-- [ ] Implement logger
+- [x] Implement logger
 - [x] Implement custom errors
 - [x] Implement `fetch_mod_registry()` in `Downloader` struct instead of using `ModCatalog::fetch_from_network()`
-- [x] Implement `has_matching_hash()` instead of version comparison
+- [ ] Implement `has_matching_hash()` instead of version comparison
 - [ ] Fix concurrent downloading by using `tokio::spawn`
+- [ ] Update example output at usage section in `README.md`
 
 ## Motivation
 
