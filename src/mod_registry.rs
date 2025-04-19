@@ -43,6 +43,7 @@ pub struct ModRegistry {
 impl ModRegistry {
     /// Initialize ModRegistry instance from raw data
     pub async fn from(data: Bytes) -> Result<Self, serde_yaml_ng::Error> {
+        info!("Parsing remote mod registry data");
         let mut mod_registry: Self = serde_yaml_ng::from_slice(&data)?;
 
         // Set the name field for each ModInfo
@@ -55,7 +56,7 @@ impl ModRegistry {
 
     /// Search for mods
     pub fn search(&self, query: &str) -> Vec<&RemoteModInfo> {
-        info!("Searching '{}'", query);
+        info!("Searching remote mod registry for mod: {}", query);
         self.entries
             .values()
             .filter(|mod_info| mod_info.name.to_lowercase().contains(&query.to_lowercase()))
@@ -64,7 +65,7 @@ impl ModRegistry {
 
     /// Get mod information
     pub fn get_mod_info(&self, name: &str) -> Option<&RemoteModInfo> {
-        info!("Get mod '{}' from registry", name);
+        info!("Getting remote mod information for mod: {}", name);
         self.entries.get(name)
     }
 }

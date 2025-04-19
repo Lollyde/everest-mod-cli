@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use tracing::info;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::constant::{MOD_MANIFEST_FILE, STEAM_MODS_DIRECTORY_PATH};
@@ -13,6 +14,7 @@ use crate::error::Error;
 
 /// Returns the path to the user's mods directory based on platform-specific conventions
 pub fn get_mods_directory() -> PathBuf {
+    info!("Detecting Celeste/Mods directory...");
     // NOTE: `std::env::home_dir()` will be undeprecated in rust 1.87.0
     home_dir()
         .map(|home_path| home_path.join(STEAM_MODS_DIRECTORY_PATH))
@@ -28,6 +30,7 @@ pub fn find_installed_mod_archives(mods_directory: &Path) -> Result<Vec<PathBuf>
         }
     }
 
+    info!("Checking installed mod archives...");
     // Collect all .zip files in the directory
     let mod_archives = fs::read_dir(mods_directory)?
         .filter_map(Result::ok)

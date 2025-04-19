@@ -5,12 +5,13 @@ use reqwest::Client;
 use std::{
     io::Read,
     path::{Path, PathBuf},
+    time::Instant,
 };
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::{
@@ -90,10 +91,13 @@ impl ModDownloader {
         name: &str,
         expected_hash: &[String],
     ) -> Result<(), Error> {
-        println!("Start downloading mod...");
+        info!("Start downloading mod: {}", name);
+
         let response = self.client.get(url).send().await?.error_for_status()?;
+        info!("Status code: {}", response.status().as_u16());
+
         let total_size = response.content_length().unwrap_or(0);
-        info!("File size: {}", total_size);
+        info!("Total file size: {}", total_size);
 
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()
@@ -103,7 +107,8 @@ impl ModDownloader {
 
         let mut stream = response.bytes_stream();
         let download_path = self.download_dir.join(format!("{}.zip", name));
-        info!("Path to download: {}", download_path.display());
+        info!("Destination: {}", download_path.display());
+
         let mut file = fs::File::create(&download_path).await?;
         let mut downloaded: u64 = 0;
 
@@ -118,13 +123,16 @@ impl ModDownloader {
         pb.finish_with_message("Download complete");
 
         // Verify checksum
-        println!("Computing file hash...");
+        info!("Computing file hash...");
         let hash = async_hash_file(&download_path).await?;
+
         info!("Computed xxhash of downloaded file: {}", hash);
         if expected_hash.contains(&hash) {
-            println!("Checksum verified");
+            info!("Checksum verified");
         } else {
+            error!("Checksum verification failed");
             fs::remove_file(&download_path).await?;
+            info!("Removed downloaded file");
             return Err(Error::InvalidChecksum {
                 file: download_path,
                 computed: hash,
@@ -137,6 +145,11 @@ impl ModDownloader {
 
     /// List installed mods which has valid manifest file
     pub fn list_installed_mods(&self) -> Result<InstalledModList, Error> {
+        info!(
+            "Collecting information about installed mods... This might take a few minutes if your mods library is huge"
+        );
+        let start = Instant::now();
+
         let archive_paths = find_installed_mod_archives(&self.download_dir)?;
         let mut installed_mods = Vec::with_capacity(archive_paths.len());
 
@@ -149,24 +162,36 @@ impl ModDownloader {
                     let local_mod = LocalModInfo::new(archive_path, manifest, checksum);
                     installed_mods.push(local_mod);
                 }
-                None => warn!(
-                    "No mod manifest file (everest.yaml) found in {}.\n\
-                        #  The file might be named 'everest.yml' or located in a subdirectory.\n\
-                        # Please contact the mod creator about this issue.\n\
-                        # Updates will be skipped for this mod.\n",
-                    archive_path.display()
-                ),
+                None => {
+                    let debug_path = archive_path
+                        .file_name()
+                        .and_then(|path| path.to_str())
+                        .expect("File name shoud be exist");
+                    warn!(
+                        "No mod manifest file (everest.yaml) found in {}.\n\
+                    \t# The file might be named 'everest.yml' or located in a subdirectory.\n\
+                    \t# Please contact the mod creator about this issue or just ignore this message.\n\
+                    \t# Updates will be skipped for this mod.",
+                        debug_path
+                    )
+                }
             }
         }
 
         // Sort by name
+        info!("Sorting results by name...");
         installed_mods.sort_by(|a, b| a.mod_name.cmp(&b.mod_name));
+
+        let duration = start.elapsed();
+        info!("Finished collecting in: {:#?}", duration);
+
         Ok(installed_mods)
     }
 }
 
 /// Compute xxhash of a given file, return hexadicimal string (async version)
 pub async fn async_hash_file(file_path: &Path) -> Result<String, Error> {
+    info!("Start hashing file");
     let file = fs::File::open(file_path).await?;
     let mut reader = BufReader::new(file);
     let mut hasher = Xxh64::new(0);
