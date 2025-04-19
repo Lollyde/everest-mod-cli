@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
 
-            println!("Installed mods ({} found):", installed_mods.len());
+            println!("\nInstalled mods ({} found):", installed_mods.len());
             for mod_info in installed_mods {
                 println!("- {} (version {})", mod_info.mod_name, mod_info.version);
             }
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .download_mod(&update.url, &update.name, &update.hash)
                                     .await?;
                                 println!(
-                                    "Updated {} to version {}",
+                                    "  Updated {} to version {}",
                                     update.name, update.available_version
                                 );
                             }
