@@ -30,7 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Command passed: {:#?}", &cli.command);
 
     // Initialize downloader early for list and update commands
-    let downloader = ModDownloader::new();
+    let home = cli.mods_dir.unwrap_or(fileutil::get_mods_directory()?);
+    let downloader = ModDownloader::new(&home);
 
     match &cli.command {
         Commands::List => {

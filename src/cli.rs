@@ -1,8 +1,14 @@
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(version, about = "Mod management tool for Celeste", long_about = None)]
 pub struct Cli {
+    /// Directory where mods are stored. This option applies to all commands.
+    #[arg(short = 'd', long = "mods-dir", value_name = "DIR")]
+    pub mods_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

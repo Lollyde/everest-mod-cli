@@ -4,7 +4,7 @@
 
 A command-line interface tool for managing Celeste mods using Everest API.
 
-Currently, target **Steam** and **Linux** installation. Flatpak version is not supported.
+Currently, target **Linux** installation. Flatpak version is not supported.
 
 ## Issues
 
@@ -68,7 +68,7 @@ ln -s $HOME/everest-mod-cli/target/release/everest-mod-cli $HOME/.local/bin/ever
 ## Usage
 
 ```bash
-everest-mod-cli [COMMAND] [OPTIONS]
+everest-mod-cli [OPTIONS] [COMMAND] 
 ```
 
 Available commands:
@@ -135,6 +135,15 @@ everest-mod-cli update
 # Check and install available updates
 everest-mod-cli update --install
 ```
+
+## Option
+
+You can specify your mods directory using `--mods-dir`.
+```sh
+# Install the mod "SpeedrunTool" while specifying the mods directory
+everest-mod-cli --mods-dir /home/theo/game/okgames/celeste/Mods/ install "SpeedrunTool"
+```
+> The directory should have permissions of at least 0700. The specific mount point does not matter.
 
 ## Notes
 

@@ -12,9 +12,15 @@ pub enum Error {
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
     Yaml(#[from] serde_yaml_ng::Error),
+
+    #[error(
+        "Could not determine home directory location!\
+        Please specify the mods directory using --mods-dir"
+    )]
+    CouldNotDetermineHomeDir,
     #[error(
         "No mods directory found.\
-        Please verify that Everest is properly installed."
+        Please verify that Everest is properly installed"
     )]
     MissingModsDirectory,
     #[error(

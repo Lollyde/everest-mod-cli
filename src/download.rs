@@ -14,7 +14,7 @@ use xxhash_rust::xxh64::Xxh64;
 use crate::{
     constant::MOD_REGISTRY_URL,
     error::Error,
-    fileutil::{find_installed_mod_archives, get_mods_directory, read_manifest_file_from_zip},
+    fileutil::{find_installed_mod_archives, read_manifest_file_from_zip},
     installed_mods::{InstalledModList, LocalModInfo, ModManifest},
     mod_registry::ModRegistry,
 };
@@ -38,13 +38,11 @@ pub struct ModDownloader {
 }
 
 impl ModDownloader {
-    pub fn new() -> Self {
-        let download_dir = get_mods_directory();
-
+    pub fn new(download_dir: &Path) -> Self {
         Self {
             client: Client::new(),
             registry_url: String::from(MOD_REGISTRY_URL),
-            download_dir,
+            download_dir: download_dir.to_path_buf(),
         }
     }
 

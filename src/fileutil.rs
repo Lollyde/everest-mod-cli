@@ -13,31 +13,31 @@ use crate::constant::{MOD_MANIFEST_FILE, STEAM_MODS_DIRECTORY_PATH};
 use crate::error::Error;
 
 /// Returns the path to the user's mods directory based on platform-specific conventions
-pub fn get_mods_directory() -> PathBuf {
+pub fn get_mods_directory() -> Result<PathBuf, Error> {
     info!("Detecting Celeste/Mods directory...");
     // NOTE: `std::env::home_dir()` will be undeprecated in rust 1.87.0
     home_dir()
         .map(|home_path| home_path.join(STEAM_MODS_DIRECTORY_PATH))
-        .expect("Unable to determine home directory location!")
+        .ok_or(Error::CouldNotDetermineHomeDir)
 }
 
 /// Scans the mods directory and returns a list of all installed mod archive files (.zip)
 pub fn find_installed_mod_archives(mods_directory: &Path) -> Result<Vec<PathBuf>, Error> {
-    // Verify the mods directory exists
-    if let Err(err) = fs::read_dir(mods_directory) {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            return Err(Error::MissingModsDirectory);
-        }
+    if !mods_directory.exists() {
+        return Err(Error::MissingModsDirectory);
     }
 
-    info!("Checking installed mod archives...");
-    // Collect all .zip files in the directory
-    let mod_archives = fs::read_dir(mods_directory)?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "zip"))
-        .collect();
+    info!("Scanning installed mod archives in {:?}", mods_directory);
+
+    let mut mod_archives = Vec::new();
+    let entries = fs::read_dir(mods_directory)?;
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "zip") {
+            mod_archives.push(path);
+        }
+    }
 
     Ok(mod_archives)
 }
