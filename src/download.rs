@@ -7,10 +7,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use tokio::{
-    fs,
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
-};
+use tokio::{fs, io::AsyncWriteExt};
 use tracing::{info, warn};
 use xxhash_rust::xxh64::Xxh64;
 
@@ -111,12 +108,14 @@ impl ModDownloader {
         let download_path = self.download_dir.join(format!("{}.zip", name));
         info!("Destination: {}", download_path.display());
 
+        let mut hasher = Xxh64::new(0);
         let mut file = fs::File::create(&download_path).await?;
         let mut downloaded: u64 = 0;
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
             file.write_all(&chunk).await?;
+            hasher.update(&chunk);
             let new = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
             downloaded = new;
             pb.set_position(new);
@@ -125,12 +124,12 @@ impl ModDownloader {
         pb.finish_with_message("Download complete");
 
         // Verify checksum
-        info!("Computing file hash...");
-        let hash = async_hash_file(&download_path).await?;
-        info!("Computed xxhash of downloaded file: {}", hash);
+        let hash = hasher.digest();
+        let hash_str = format!("{:016x}", hash);
+        info!("xxhash of downloaded file: {}", hash_str);
 
         println!("Verifying checksum...");
-        if expected_hash.contains(&hash) {
+        if expected_hash.contains(&hash_str) {
             println!("Checksum verified");
         } else {
             println!("Checksum verification failed");
@@ -138,7 +137,7 @@ impl ModDownloader {
             println!("Downloaded file removed");
             return Err(Error::InvalidChecksum {
                 file: download_path,
-                computed: hash,
+                computed: hash_str,
                 expected: expected_hash.to_vec(),
             });
         }
@@ -190,24 +189,6 @@ impl ModDownloader {
 
         Ok(installed_mods)
     }
-}
-
-/// Compute xxhash of a given file, return hexadicimal string (async version)
-pub async fn async_hash_file(file_path: &Path) -> Result<String, Error> {
-    info!("Start hashing file");
-    let file = fs::File::open(file_path).await?;
-    let mut reader = BufReader::new(file);
-    let mut hasher = Xxh64::new(0);
-    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
-    loop {
-        let bytes_read = reader.read(&mut buffer).await?;
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-    let hash_str = format!("{:016x}", hasher.digest());
-    Ok(hash_str)
 }
 
 /// Compute xxhash of a given file, return hexadicimal string (sync version)
