@@ -28,9 +28,9 @@ pub struct Dependency {
 }
 
 impl ModManifest {
-    /// Parses the mod manifest YAML content into a structured `ModManifest` object.
-    pub fn parse_mod_manifest_from_yaml(yaml_content: &str) -> Result<Self, Error> {
-        let mut manifest_entries = serde_yaml_ng::from_str::<VecDeque<ModManifest>>(yaml_content)?;
+    /// Parses the mod manifest YAML buffer into a structured `ModManifest` object.
+    pub fn parse_mod_manifest_from_yaml(yaml_buffer: &[u8]) -> Result<Self, Error> {
+        let mut manifest_entries = serde_yaml_ng::from_slice::<VecDeque<ModManifest>>(yaml_buffer)?;
 
         // Attempt to retrieve the first entry without unnecessary cloning.
         manifest_entries
