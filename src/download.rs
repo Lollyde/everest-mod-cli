@@ -11,7 +11,7 @@ use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::{
@@ -22,8 +22,9 @@ use crate::{
     mod_registry::ModRegistry,
 };
 
+/// Update information about the mod
 #[derive(Debug)]
-pub struct UpdateInfo {
+pub struct AvailableUpdateInfo {
     pub name: String,
     pub current_version: String,
     pub available_version: String,
@@ -58,30 +59,31 @@ impl ModDownloader {
         Ok(yaml_data)
     }
 
-    // TODO: change logic to hash comparison
-    pub async fn check_updates(
+    // Check available updates for all installed mods
+    pub fn check_updates(
         &self,
         mod_registry: &ModRegistry,
-    ) -> Result<Vec<UpdateInfo>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<AvailableUpdateInfo>, Error> {
         let installed_mods = self.list_installed_mods()?;
-        let mut updates = Vec::new();
+        let mut available_updates = Vec::new();
 
-        for installed_mod in installed_mods {
-            if let Some(available_mod) = mod_registry.get_mod_info(&installed_mod.mod_name) {
-                // Compare versions
-                if compare_versions(&available_mod.version, &installed_mod.version).is_gt() {
-                    updates.push(UpdateInfo {
-                        name: installed_mod.mod_name,
-                        current_version: installed_mod.version,
-                        available_version: available_mod.version.clone(),
-                        url: available_mod.download_url.clone(),
-                        hash: available_mod.checksums.clone(),
-                    });
-                }
+        for local_mod in installed_mods {
+            if let Some(remote_mod) = mod_registry.get_mod_info(&local_mod.mod_name) {
+                if remote_mod.has_matching_hash(&local_mod.checksum) {
+                    continue; // No update avilable
+                };
+                let available_mod = remote_mod.clone();
+                available_updates.push(AvailableUpdateInfo {
+                    name: local_mod.mod_name,
+                    current_version: local_mod.version,
+                    available_version: available_mod.version,
+                    url: available_mod.download_url,
+                    hash: available_mod.checksums,
+                });
             }
         }
 
-        Ok(updates)
+        Ok(available_updates)
     }
 
     /// Download mod file and verify checksum
@@ -125,14 +127,15 @@ impl ModDownloader {
         // Verify checksum
         info!("Computing file hash...");
         let hash = async_hash_file(&download_path).await?;
-
         info!("Computed xxhash of downloaded file: {}", hash);
+
+        println!("Verifying checksum...");
         if expected_hash.contains(&hash) {
-            info!("Checksum verified");
+            println!("Checksum verified");
         } else {
-            error!("Checksum verification failed");
+            println!("Checksum verification failed");
             fs::remove_file(&download_path).await?;
-            info!("Removed downloaded file");
+            println!("Downloaded file removed");
             return Err(Error::InvalidChecksum {
                 file: download_path,
                 computed: hash,
@@ -222,27 +225,4 @@ pub fn sync_hash_file(file_path: &Path) -> Result<String, Error> {
     }
     let hash_str = format!("{:016x}", hasher.digest());
     Ok(hash_str)
-}
-
-// TODO: make this hash comparison
-fn compare_versions(ver1: &str, ver2: &str) -> std::cmp::Ordering {
-    let v1_parts: Vec<&str> = ver1.split('.').collect();
-    let v2_parts: Vec<&str> = ver2.split('.').collect();
-
-    for i in 0..std::cmp::max(v1_parts.len(), v2_parts.len()) {
-        let n1 = v1_parts
-            .get(i)
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        let n2 = v2_parts
-            .get(i)
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-
-        match n1.cmp(&n2) {
-            std::cmp::Ordering::Equal => continue,
-            other => return other,
-        }
-    }
-    std::cmp::Ordering::Equal
 }

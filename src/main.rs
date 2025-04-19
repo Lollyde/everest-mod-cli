@@ -114,20 +114,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Commands::Update(args) => {
-                    println!("Checking mod updates");
-                    let updates = downloader.check_updates(&mod_registry).await?;
-                    if updates.is_empty() {
+                    println!("Checking mod updates...");
+                    let available_updates = downloader.check_updates(&mod_registry)?;
+                    if available_updates.is_empty() {
                         println!("All mods are up to date!");
                     } else {
                         println!("Available updates:");
-                        for update in &updates {
-                            println!("\n{}", update.name);
-                            println!("  Current version: {}", update.current_version);
-                            println!("  Available version: {}", update.available_version);
+                        for update_info in &available_updates {
+                            println!("\n{}", update_info.name);
+                            println!(" - Current version: {}", update_info.current_version);
+                            println!(" - Available version: {}", update_info.available_version);
                         }
                         if args.install {
                             println!("\nInstalling updates...");
-                            for update in updates {
+                            for update in available_updates {
                                 println!("\nUpdating {}...", update.name);
                                 downloader
                                     .download_mod(&update.url, &update.name, &update.hash)

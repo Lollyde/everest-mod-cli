@@ -33,6 +33,22 @@ pub struct RemoteModInfo {
     pub gamebanana_id: u32,
 }
 
+impl RemoteModInfo {
+    /// Checks if the provided hash matches any of the expected checksums.
+    ///
+    /// # Arguments
+    ///
+    /// * `computed_hash` - The hash to check against the mod's checksums.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the hash matches any of the checksums, otherwise `false`.
+    pub fn has_matching_hash(&self, computed_hash: &String) -> bool {
+        // Check if the computed hash exists in the list of expected checksums
+        self.checksums.contains(computed_hash)
+    }
+}
+
 /// Mod Registry: represents the complete `everest_update.yaml` containing all available remote mods
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ModRegistry {
