@@ -2,60 +2,36 @@
 
 **WIP**: This project is under development. Expect breaking changes and limited functionality. Use at your own risk.
 
-A command-line interface tool for managing Celeste mods using the maddie's public online database.
+A command-line interface tool for managing Celeste mods using the maddie480's public online database.
 
-Currently, target **Linux** installation. Flatpak version is not supported.
+This project currently targets **Linux** installation. The **Flatpak** version is not supported. **MacOS** might work, but it's not guaranteed
 
 ## Table of Contents
 
 - [Features](#features)
 - [Installation](#installation)
 - [Usage](#usage)
+  - [list](#list)
+  - [show](#show)
   - [search](#search-query)
   - [info](#info-mod_name)
   - [install](#install-mod_name)
-  - [list](#list)
-  - [show](#show)
   - [update](#update)
 - [Motivation](#motivation)
 - [Notes](#notes)
-- [Credits](#credits)
+- [Acknowledgments](#acknowledgments)
 - [License](#license)
-
-## Issues
-
-- [x] `ModCatalog::fetch_from_network()` is being called twice in some operations
-- [x] Version comparison is not meaningful. The value might contain a nonsensical string instead of a number. Additionally, modders might not increment the version number. It would be better to compare the xxhash of the files
-- [ ] The downloading tasks are not running concurrently, even though the process is optimized
-- [x] The list command displays the basename of the filename, instead of the actual mod name
-- [ ] The `LastUpdate` value is not in a human-readable format
-- [ ] Dependencies does not shown in `show` command
-- [ ] Does not respect `updaterblacklist.txt`
-- [ ] No caches for remote mod registry and manifests files
-
-## TODO
-
-- [x] Implement logger
-- [x] Implement custom errors
-- [x] Implement `fetch_mod_registry()` in `Downloader` struct instead of using `ModCatalog::fetch_from_network()`
-- [x] Implement `has_matching_hash()` instead of version comparison
-- [ ] Fix concurrent downloading by using `tokio::spawn`
-- [ ] Update example output at usage section in `README.md`
-- [ ] Verify checksum of downloaded file on temporary directory to avoid needless disk allocation
-- [ ] Move Issues and TODO to GitHub issue page
-- [ ] Update credits section, reference to maddie's repo
-- [ ] Think about more suitable name for the program
 
 ## Features
 
-- Easy mod installation and management within terminal
-- Install a mod by its name: No need for Olympus or browser
-- List all installed mods with actual mod name and version
-- Search for mods by name: Quickly find mods in the Everest online database without navigating through a browser.
-- Display detailed information about a specific mod: Useful for manual downloads using external downloader like `wget` or `aria2c`
-- Show the details of a specific mod that have been installed: Easy to check their dependencies
-- Check for available updates for installed mods and can install them automatically: Running on background! You can play the game while downloading!
-- Asynchronous downloads reduce total download time, also lesser memory usage and faster checksum veryfications
+- **Seamless Mod Installation and Management**: Easily install and manage mods directly from the terminal.
+- **Install Mods by Name**: No need for Olympus or a web browser—just type the mod name to install.
+- **Comprehensive Mod Listing**: View all installed mods along with their names and versions at a glance.
+- **Quick Mod Search**: Effortlessly find mods in the Everest online database without the hassle of navigating a browser.
+- **Detailed Mod Information**: Access in-depth details about specific mods, perfect for manual downloads using external tools like `wget` or `aria2c`.
+- **Installed Mod Details**: Easily check the dependencies of your installed mods for better management.
+- **Automatic Update Checks**: Stay up-to-date with available updates for your installed mods, which can be installed automatically while you play—running in the background!
+- **Asynchronous Downloads**: Experience reduced total download times, lower memory usage, and faster checksum verifications for a smoother experience. 
 
 ## Installation
 
@@ -88,11 +64,48 @@ everest-mod-cli [OPTIONS] [COMMAND]
 
 Available commands:
 
+### `list`
+
+List all installed mods, showing their actual names and versions.
+```bash
+everest-mod-cli list
+# Collecting information about installed mods... This might take a few minutes if your mods library is huge
+#
+# Installed mods (138 found):
+# - AdamsAddons (version 1.13.3)
+# - AdventureHelper (version 1.6.0)
+# - AidenHelper (version 1.2.1)
+# - AltSidesHelper (version 1.7.1)
+# - Anonhelper (version 1.1.1)
+# - ArphimigonsToyBox (version 1.4.0)
+# - AurorasHelper (version 0.12.2)
+# - AvBdayHelper2021 (version 1.0.3)
+# - BGswitch (version 1.2.2)
+# - Batteries (version 1.1.4)
+# ----------------------------------
+```
+
+### `show <mod_name>`
+
+Show the details of a specific mod that have been installed.
+```bash
+everest-mod-cli show "Iceline_silentriver"
+# Checking installed mod information...
+# Mod Information:
+# - Name: Iceline_silentriver
+# - Version: 1.1
+#
+# Dependencies:
+#  - Everest v1.4.0.0
+#  - SkinModHelper v0.6.1
+#  - IcelineLoadingAnim v1.0.0
+```
+
 ### `search <query>`
 
 Search for mods in the online database using a search query.
 ```bash
-everest-mod-cli search "GDDH"
+everest-mod-cli search "shrimp"
 # Searching for mods matching 'shrimp'...
 # Found 8 matching mods:
 # 
@@ -112,14 +125,13 @@ everest-mod-cli search "GDDH"
 #  - Download: https://gamebanana.com/mmdl/1414732
 #
 # ------------------------------------------------
-#
-```
+#```
 
 ### `info <mod_name>`
 
 Display detailed information about a specific mod.
 ```bash
-everest-mod-cli info "SpringCollab2020"
+everest-mod-cli info "zbs_Crystal"
 # Looking up information for the mod 'zbs_Crystal'...
 # 
 # zbs_Crystal (version 1.2.8)
@@ -143,34 +155,6 @@ everest-mod-cli install "SpeedrunTool"
 # Installation finished successfully!
 ```
 
-### `list`
-
-List all installed mods, showing their actual names and versions.
-```bash
-everest-mod-cli list
-# Collecting information about installed mods... This might take a few minutes if your mods library is huge
-#
-# Installed mods:
-#  - Iceline_silentriver v1.1
-#  - aqualias-101 v1.0.1
-```
-
-### `show <mod_name>`
-
-Show the details of a specific mod that have been installed.
-```bash
-everest-mod-cli show "Iceline_silentriver"
-# Checking installed mod information...
-# Mod Information:
-# - Name: Iceline_silentriver
-# - Version: 1.1
-#
-# Dependencies:
-#  - Everest v1.4.0.0
-#  - SkinModHelper v0.6.1
-#  - IcelineLoadingAnim v1.0.0
-```
-
 ### `update`
 
 Check for available updates for installed mods.
@@ -186,6 +170,8 @@ everest-mod-cli update
 # 
 # Run with --install to install these updates
 ```
+
+Install available updates.
 ```bash
 # Check and install available updates
 everest-mod-cli update --install
@@ -209,7 +195,7 @@ everest-mod-cli update --install
 
 ## Option
 
-You can specify your mods directory using `--mods-dir`.
+You can specify your custom mods directory using `--mods-dir`.
 ```bash
 # Install the mod "SpeedrunTool" while specifying the mods directory
 everest-mod-cli --mods-dir /home/maddy/game/exokgames/celeste/Mods/ install "SpeedrunTool"
@@ -222,21 +208,21 @@ Everest and Olympus are excellent tools for managing Celeste mods. However, ther
 
 - Olympus is unstable or completely non-functional on certain Linux distributions, particularly in **Wayland** environments.
 - Download speed is slow in some countries.
-  - CLI tools like curl or wget are sometimes faster than in-game downloads.
-  - Cannot run auto updates on background
-  - Need to wait or entirely cancel the updates when opening the game
+  - CLI tools like `curl` or `wget` are sometimes faster than in-game downloads.
+  - Cannot run auto updates on background.
+  - Need to wait or entirely cancel the updates when opening the game.
 - No option to *cancel*, *pause*, or *resume* downloads in mod menu.
 - Lack of clarity about `dependencies` when uninstalling mods.
 
 ## Notes
 
-- The `mod_name` and their filenames are not the same.
-- The `mod_name` is the name of the Mod as it appears in the game menu.
-- The `filename` is the name of the file that contains the Mod's metadata.
+- The `mod_name` and the corresponding filenames may not match.
+- The `mod_name` refers to the name of the Mod as it appears in the game menu.
+- The `filename` is the name of the zip file that contains the Mod's assets and the manifest file called `everest.yaml`.
 
-## Credits
+## Acknowledgments
 
-This project uses [Everest](https://github.com/EverestAPI/Everest), the Celeste Mod Loader and Base API.
+This project was made possible thanks to the [EverestUpdateCheckerServer](https://github.com/maddie480/EverestUpdateCheckerServer) hosted by [maddie480](https://github.com/maddie480). We're grateful for their work, which has been instrumental in the development of this project.
 
 ## License
 
