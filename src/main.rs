@@ -137,6 +137,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     "  Updated {} to version {}",
                                     update.name, update.available_version
                                 );
+                                if update.existing_path.exists() {
+                                    tokio::fs::remove_file(update.existing_path).await?;
+                                }
                             }
                             println!("\nAll updates installed successfully!");
                         } else {
