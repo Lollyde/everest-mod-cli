@@ -82,7 +82,7 @@ everest-mod-cli list
 # - AvBdayHelper2021 (version 1.0.3)
 # - BGswitch (version 1.2.2)
 # - Batteries (version 1.1.4)
-# ----------------------------------
+# ...
 ```
 
 ### `show <mod_name>`
@@ -123,9 +123,8 @@ everest-mod-cli search "shrimp"
 #  - Updated at: 1743778527
 #  - Page: https://gamebanana.com/mods/435408
 #  - Download: https://gamebanana.com/mmdl/1414732
-#
-# ------------------------------------------------
-#```
+# ...
+```
 
 ### `info <mod_name>`
 
