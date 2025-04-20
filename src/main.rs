@@ -145,7 +145,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 "[Successs] Updated {} to version {}\n",
                                                 update.name, update.available_version
                                             );
-                                        }
+                                            if update.existing_path.exists() {
+                                    tokio::fs::remove_file(update.existing_path).await?;
+                                }
+                            }
                                         Err(e) => {
                                             eprintln!(
                                                 "[Error] Failed to update {}: {}",

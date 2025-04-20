@@ -22,11 +22,18 @@ use crate::{
 /// Update information about the mod
 #[derive(Debug)]
 pub struct AvailableUpdateInfo {
+    /// The Mod name
     pub name: String,
+    /// Current version (from LocalModInfo)
     pub current_version: String,
+    /// Available version (from RemoteModInfo)
     pub available_version: String,
+    /// Download URL of the Mod
     pub url: String,
+    /// xxHashes of the file
     pub hash: Vec<String>,
+    /// Outdated file
+    pub existing_path: PathBuf,
 }
 
 /// Manage mod downloads
@@ -74,6 +81,7 @@ impl ModDownloader {
                     available_version: available_mod.version,
                     url: available_mod.download_url,
                     hash: available_mod.checksums,
+                    existing_path: local_mod.archive_path,
                 });
             }
         }
