@@ -7,6 +7,7 @@ use std::{
 };
 
 use tracing::info;
+use xxhash_rust::xxh64::Xxh64;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::constant::{MOD_MANIFEST_FILE, STEAM_MODS_DIRECTORY_PATH};
@@ -64,6 +65,23 @@ pub fn read_manifest_file_from_zip(zip_path: &Path) -> Result<Option<Vec<u8>>, E
         Err(ZipError::FileNotFound) => Ok(None),
         Err(err) => Err(Error::Io(err.into())),
     }
+}
+
+/// Compute xxhash of a given file, return hexadicimal string
+pub fn hash_file(file_path: &Path) -> Result<String, Error> {
+    let file = std::fs::File::open(file_path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut hasher = Xxh64::new(0);
+    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    let hash_str = format!("{:016x}", hasher.digest());
+    Ok(hash_str)
 }
 
 #[cfg(test)]

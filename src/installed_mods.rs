@@ -1,7 +1,16 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, path::PathBuf};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
+use tracing::{info, warn};
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    fileutil::hash_file,
+    fileutil::{find_installed_mod_archives, read_manifest_file_from_zip},
+    mod_registry::ModRegistry,
+};
 
 /// Represents the `everest.yaml` manifest file that defines a mod
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,34 +57,114 @@ pub struct LocalModInfo {
     /// Path to the zip file which contains the mod's assets and manifest
     #[serde(rename = "Filename")]
     pub archive_path: PathBuf,
-    /// Name of the mod as defined in its manifest
-    #[serde(rename = "Mod Name")]
-    pub mod_name: String,
-    /// Version string of the mod
-    #[serde(rename = "Version")]
-    pub version: String,
+    /// Mod manifest
+    pub manifest: ModManifest,
     /// Computed XXH64 hash of the mod archive for update verification
     #[serde(rename = "xxHash")]
-    pub checksum: String,
+    pub checksum: Option<String>,
 }
 
 impl LocalModInfo {
-    /// Creates a new LocalModInfo from a mod's archive path, manifest, and computed checksum
-    pub fn new(archive_path: PathBuf, manifest: ModManifest, checksum: String) -> Self {
-        let mod_name = manifest.name;
-        let version = manifest.version;
-
-        // Extract basename from full path.
-        let archive_filename = archive_path
-            .file_name()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| archive_path.clone());
-
+    pub fn new(archive_path: PathBuf, manifest: ModManifest) -> Self {
         Self {
-            archive_path: archive_filename,
-            mod_name,
-            version,
-            checksum,
+            archive_path,
+            manifest,
+            checksum: None,
         }
     }
+}
+
+pub fn update_mod_hashes(installed_mods: &mut [LocalModInfo]) {
+    for mod_info in installed_mods.iter_mut() {
+        // Compute the hash for the mod archive file.
+        if let Ok(hash) = hash_file(&mod_info.archive_path) {
+            mod_info.checksum = Some(hash);
+        }
+    }
+}
+
+/// List installed mods which has valid manifest file
+pub fn list_installed_mods(mods_dir: &Path) -> Result<InstalledModList, Error> {
+    let archive_paths = find_installed_mod_archives(mods_dir)?;
+    let mut installed_mods = Vec::with_capacity(archive_paths.len());
+
+    for archive_path in archive_paths {
+        let manifest_content = read_manifest_file_from_zip(&archive_path)?;
+        match manifest_content {
+            Some(buffer) => {
+                let manifest = ModManifest::parse_mod_manifest_from_yaml(&buffer)?;
+                let mod_info = LocalModInfo::new(archive_path, manifest);
+                installed_mods.push(mod_info);
+            }
+            None => {
+                let debug_path = archive_path
+                    .file_name()
+                    .and_then(|path| path.to_str())
+                    .expect("File name shoud be exist");
+                warn!(
+                    "No mod manifest file (everest.yaml) found in {}.\n\
+                \t# The file might be named 'everest.yml' or located in a subdirectory.\n\
+                \t# Please contact the mod creator about this issue or just ignore this message.\n\
+                \t# Updates will be skipped for this mod.",
+                    debug_path
+                )
+            }
+        }
+    }
+    // Sort by name
+    info!("Sorting results by name...");
+    installed_mods.sort_by(|a, b| a.manifest.name.cmp(&b.manifest.name));
+
+    Ok(installed_mods)
+}
+
+/// Update information about the mod
+#[derive(Debug)]
+pub struct AvailableUpdateInfo {
+    /// The Mod name
+    pub name: String,
+    /// Current version (from LocalModInfo)
+    pub current_version: String,
+    /// Available version (from RemoteModInfo)
+    pub available_version: String,
+    /// Download URL of the Mod
+    pub url: String,
+    /// xxHashes of the file
+    pub hash: Vec<String>,
+    /// Outdated file
+    pub existing_path: PathBuf,
+}
+
+/// Check available updates for all installed mods
+pub fn check_updates(
+    mods_dir: &Path,
+    mod_registry: &ModRegistry,
+) -> Result<Vec<AvailableUpdateInfo>, Error> {
+    let mut installed_mods = list_installed_mods(mods_dir)?;
+    // Compute file hashes
+    update_mod_hashes(&mut installed_mods);
+
+    let mut available_updates = Vec::new();
+    for local_mod in installed_mods {
+        if let Some(remote_mod) = mod_registry.get_mod_info(&local_mod.manifest.name) {
+            if let Some(computed_hash) = &local_mod.checksum {
+                if remote_mod.has_matching_hash(computed_hash) {
+                    continue; // No update avilable
+                };
+                let available_mod = remote_mod.clone();
+                available_updates.push(AvailableUpdateInfo {
+                    name: local_mod.manifest.name,
+                    current_version: local_mod.manifest.version,
+                    available_version: available_mod.version,
+                    url: available_mod.download_url,
+                    hash: available_mod.checksums,
+                    existing_path: local_mod.archive_path,
+                });
+            } else {
+                return Err(Error::FileIsNotHashed);
+            }
+        }
+    }
+
+    Ok(available_updates)
 }
