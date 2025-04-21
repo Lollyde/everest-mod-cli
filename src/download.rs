@@ -101,6 +101,10 @@ impl ModDownloader {
         let response = self.client.get(url).send().await?.error_for_status()?;
         info!("Status code: {}", response.status().as_u16());
 
+        let filename = util::determine_filename(&response)?;
+        let download_path = self.download_dir.join(format!("{}.zip", filename));
+        info!("Destination: {}", download_path.display());
+
         let total_size = response.content_length().unwrap_or(0);
         info!("Total file size: {}", total_size);
 
@@ -111,8 +115,6 @@ impl ModDownloader {
             .progress_chars("#>-"));
 
         let mut stream = response.bytes_stream();
-        let download_path = self.download_dir.join(format!("{}.zip", name));
-        info!("Destination: {}", download_path.display());
 
         let mut hasher = Xxh64::new(0);
         let mut file = fs::File::create(&download_path).await?;
@@ -212,4 +214,43 @@ pub fn sync_hash_file(file_path: &Path) -> Result<String, Error> {
     }
     let hash_str = format!("{:016x}", hasher.digest());
     Ok(hash_str)
+}
+
+mod util {
+    use super::*;
+    use reqwest::{Response, Url};
+    use uuid::Uuid;
+
+    /// Determines the most appropriate filename for a downloaded mod using URL and metadata
+    pub fn determine_filename(response: &Response) -> Result<String, Error> {
+        // Try to extract filename from the URL path.
+        let filename_from_url = extract_filename_from_url(response.url());
+
+        // Try to extract filename from the ETag header.
+        let filename_from_etag = extract_filename_from_etag(response);
+
+        // Choose the best available filename or generate a random one
+        let mod_filename = filename_from_url
+            .or(filename_from_etag)
+            .unwrap_or_else(|| format!("unknown-mod_{}.zip", Uuid::new_v4()));
+
+        Ok(mod_filename)
+    }
+
+    /// Extracts a filename from the last segment of a URL path
+    fn extract_filename_from_url(url: &Url) -> Option<String> {
+        url.path_segments()
+            .and_then(|mut segments| segments.next_back().filter(|&segment| !segment.is_empty()))
+            .map(String::from)
+    }
+
+    /// Creates a filename using the ETag header value, properly formatted with extension
+    fn extract_filename_from_etag(response: &Response) -> Option<String> {
+        response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|etag_value| etag_value.to_str().ok())
+            .map(|etag| etag.trim_matches('"').to_string())
+            .map(|etag| format!("{}.zip", etag))
+    }
 }
