@@ -128,19 +128,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         if args.install {
                             println!("\nInstalling updates...");
+                            let mut handles = Vec::new();
+
                             for update in available_updates {
-                                println!("\nUpdating {}...", update.name);
-                                downloader
-                                    .download_mod(&update.url, &update.name, &update.hash)
-                                    .await?;
-                                println!(
-                                    "  Updated {} to version {}",
-                                    update.name, update.available_version
-                                );
-                                if update.existing_path.exists() {
-                                    tokio::fs::remove_file(update.existing_path).await?;
-                                }
+                                let downloader = downloader.clone();
+                                println!("\nUpdating {}:", update.name);
+
+                                let handle = tokio::spawn(async move {
+                                    let result = downloader
+                                        .download_mod(&update.url, &update.name, &update.hash)
+                                        .await;
+
+                                    match result {
+                                        Ok(_) => {
+                                            println!(
+                                                "[Successs] Updated {} to version {}\n",
+                                                update.name, update.available_version
+                                            );
+                                            if update.existing_path.exists() {
+                                                if let Err(e) =
+                                                    tokio::fs::remove_file(&update.existing_path)
+                                                        .await
+                                                {
+                                                    eprintln!(
+                                                        "Failed to remove outdated file: {}.\nPlease remove it manually. File path: {}",
+                                                        e,
+                                                        update.existing_path.display()
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "[Error] Failed to update {}: {}",
+                                                update.name, e
+                                            );
+                                        }
+                                    }
+                                });
+                                handles.push(handle);
                             }
+
+                            for handle in handles {
+                                handle.await?;
+                            }
+
                             println!("\nAll updates installed successfully!");
                         } else {
                             println!("\nRun with --install to install these updates");
