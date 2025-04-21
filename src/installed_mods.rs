@@ -6,7 +6,7 @@ use std::{
 use tracing::{info, warn};
 
 use crate::{
-    error::Error,
+    error::{Error, Error::FileIsNotHashed},
     fileutil::hash_file,
     fileutil::{find_installed_mod_archives, read_manifest_file_from_zip},
     mod_registry::ModRegistry,
@@ -61,7 +61,7 @@ pub struct LocalModInfo {
     pub manifest: ModManifest,
     /// Computed XXH64 hash of the mod archive for update verification
     #[serde(rename = "xxHash")]
-    pub checksum: Option<String>,
+    checksum: Option<String>,
 }
 
 impl LocalModInfo {
@@ -71,6 +71,17 @@ impl LocalModInfo {
             manifest,
             checksum: None,
         }
+    }
+
+    pub fn checksum(&mut self) -> Result<&str, Error> {
+        if self.checksum.is_none() {
+            match hash_file(&self.archive_path){
+                Ok(checksum) => self.checksum = Some(checksum),
+                Err(E) => return Err(E)
+            }
+        }
+        // unwrap is fine here 
+        Ok(self.checksum.as_deref().unwrap())
     }
 }
 
@@ -141,13 +152,11 @@ pub fn check_updates(
     mod_registry: &ModRegistry,
 ) -> Result<Vec<AvailableUpdateInfo>, Error> {
     let mut installed_mods = list_installed_mods(mods_dir)?;
-    // Compute file hashes
-    update_mod_hashes(&mut installed_mods);
 
     let mut available_updates = Vec::new();
-    for local_mod in installed_mods {
+    for mut local_mod in installed_mods {
         if let Some(remote_mod) = mod_registry.get_mod_info(&local_mod.manifest.name) {
-            if let Some(computed_hash) = &local_mod.checksum {
+            if let Ok(computed_hash) = &local_mod.checksum() {
                 if remote_mod.has_matching_hash(computed_hash) {
                     continue; // No update avilable
                 };
