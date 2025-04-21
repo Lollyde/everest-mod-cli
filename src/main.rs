@@ -146,9 +146,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 update.name, update.available_version
                                             );
                                             if update.existing_path.exists() {
-                                    tokio::fs::remove_file(update.existing_path).await?;
-                                }
-                            }
+                                                if let Err(e) =
+                                                    tokio::fs::remove_file(&update.existing_path)
+                                                        .await
+                                                {
+                                                    eprintln!(
+                                                        "Failed to remove outdated file: {}.\nPlease remove it manually. File path: {}",
+                                                        e,
+                                                        update.existing_path.display()
+                                                    );
+                                                }
+                                            }
+                                        }
                                         Err(e) => {
                                             eprintln!(
                                                 "[Error] Failed to update {}: {}",
