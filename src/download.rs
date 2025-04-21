@@ -126,13 +126,13 @@ impl ModDownloader {
         let hash_str = format!("{:016x}", hash);
         info!("xxhash of downloaded file: {}", hash_str);
 
-        println!("\n[{}] Verifying checksum...", name);
+        println!("\n  Verifying checksum...");
         if expected_hash.contains(&hash_str) {
-            println!("[{}] Checksum verified!", name);
+            println!("  Checksum verified!");
         } else {
-            println!("[{}] Checksum verification failed!", name);
+            println!("  Checksum verification failed!");
             fs::remove_file(&download_path).await?;
-            println!("[{}] Downloaded file removed", name);
+            println!("  Downloaded file removed");
             return Err(Error::InvalidChecksum {
                 file: download_path,
                 computed: hash_str,
