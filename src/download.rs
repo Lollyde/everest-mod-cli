@@ -2,39 +2,12 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
-    time::Instant,
-};
+use std::path::{Path, PathBuf};
 use tokio::{fs, io::AsyncWriteExt};
-use tracing::{info, warn};
+use tracing::info;
 use xxhash_rust::xxh64::Xxh64;
 
-use crate::{
-    constant::MOD_REGISTRY_URL,
-    error::Error,
-    fileutil::{find_installed_mod_archives, read_manifest_file_from_zip},
-    installed_mods::{InstalledModList, LocalModInfo, ModManifest},
-    mod_registry::ModRegistry,
-};
-
-/// Update information about the mod
-#[derive(Debug)]
-pub struct AvailableUpdateInfo {
-    /// The Mod name
-    pub name: String,
-    /// Current version (from LocalModInfo)
-    pub current_version: String,
-    /// Available version (from RemoteModInfo)
-    pub available_version: String,
-    /// Download URL of the Mod
-    pub url: String,
-    /// xxHashes of the file
-    pub hash: Vec<String>,
-    /// Outdated file
-    pub existing_path: PathBuf,
-}
+use crate::{constant::MOD_REGISTRY_URL, error::Error};
 
 /// Manage mod downloads
 #[derive(Debug, Clone)]
@@ -59,34 +32,6 @@ impl ModDownloader {
         let response = self.client.get(&self.registry_url).send().await?;
         let yaml_data = response.bytes().await?;
         Ok(yaml_data)
-    }
-
-    // Check available updates for all installed mods
-    pub fn check_updates(
-        &self,
-        mod_registry: &ModRegistry,
-    ) -> Result<Vec<AvailableUpdateInfo>, Error> {
-        let installed_mods = self.list_installed_mods()?;
-        let mut available_updates = Vec::new();
-
-        for local_mod in installed_mods {
-            if let Some(remote_mod) = mod_registry.get_mod_info(&local_mod.mod_name) {
-                if remote_mod.has_matching_hash(&local_mod.checksum) {
-                    continue; // No update avilable
-                };
-                let available_mod = remote_mod.clone();
-                available_updates.push(AvailableUpdateInfo {
-                    name: local_mod.mod_name,
-                    current_version: local_mod.version,
-                    available_version: available_mod.version,
-                    url: available_mod.download_url,
-                    hash: available_mod.checksums,
-                    existing_path: local_mod.archive_path,
-                });
-            }
-        }
-
-        Ok(available_updates)
     }
 
     /// Download mod file and verify checksum
@@ -152,68 +97,6 @@ impl ModDownloader {
 
         Ok(())
     }
-
-    /// List installed mods which has valid manifest file
-    pub fn list_installed_mods(&self) -> Result<InstalledModList, Error> {
-        info!(
-            "Collecting information about installed mods... This might take a few minutes if your mods library is huge"
-        );
-        let start = Instant::now();
-
-        let archive_paths = find_installed_mod_archives(&self.download_dir)?;
-        let mut installed_mods = Vec::with_capacity(archive_paths.len());
-
-        for archive_path in archive_paths {
-            let manifest_content = read_manifest_file_from_zip(&archive_path)?;
-            match manifest_content {
-                Some(content) => {
-                    let checksum = sync_hash_file(&archive_path)?;
-                    let manifest = ModManifest::parse_mod_manifest_from_yaml(&content)?;
-                    let local_mod = LocalModInfo::new(archive_path, manifest, checksum);
-                    installed_mods.push(local_mod);
-                }
-                None => {
-                    let debug_path = archive_path
-                        .file_name()
-                        .and_then(|path| path.to_str())
-                        .expect("File name shoud be exist");
-                    warn!(
-                        "No mod manifest file (everest.yaml) found in {}.\n\
-                    \t# The file might be named 'everest.yml' or located in a subdirectory.\n\
-                    \t# Please contact the mod creator about this issue or just ignore this message.\n\
-                    \t# Updates will be skipped for this mod.",
-                        debug_path
-                    )
-                }
-            }
-        }
-
-        // Sort by name
-        info!("Sorting results by name...");
-        installed_mods.sort_by(|a, b| a.mod_name.cmp(&b.mod_name));
-
-        let duration = start.elapsed();
-        info!("Finished collecting in: {:#?}", duration);
-
-        Ok(installed_mods)
-    }
-}
-
-/// Compute xxhash of a given file, return hexadicimal string (sync version)
-pub fn sync_hash_file(file_path: &Path) -> Result<String, Error> {
-    let file = std::fs::File::open(file_path)?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut hasher = Xxh64::new(0);
-    let mut buffer = [0u8; 8192]; // Read in 8 KB chunks
-    loop {
-        let bytes_read = reader.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-    let hash_str = format!("{:016x}", hasher.digest());
-    Ok(hash_str)
 }
 
 mod util {

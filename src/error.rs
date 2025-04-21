@@ -40,4 +40,6 @@ pub enum Error {
     },
     #[error(transparent)]
     Request(#[from] reqwest::Error),
+    #[error("The file is not hashed. It seems developer's fault")]
+    FileIsNotHashed,
 }

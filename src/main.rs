@@ -10,6 +10,7 @@ mod mod_registry;
 
 use cli::{Cli, Commands};
 use download::ModDownloader;
+use installed_mods::{check_updates, list_installed_mods};
 use mod_registry::ModRegistry;
 use tracing::{debug, info};
 
@@ -30,12 +31,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Command passed: {:#?}", &cli.command);
 
     // Initialize downloader early for list and update commands
-    let home = cli.mods_dir.unwrap_or(fileutil::get_mods_directory()?);
-    let downloader = ModDownloader::new(&home);
+    let mods_dir = cli.mods_dir.unwrap_or(fileutil::get_mods_directory()?);
 
     match &cli.command {
         Commands::List => {
-            let installed_mods = downloader.list_installed_mods()?;
+            let installed_mods = list_installed_mods(&mods_dir)?;
             if installed_mods.is_empty() {
                 println!("No mods are currently installed.");
                 return Ok(());
@@ -43,17 +43,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("\nInstalled mods ({} found):", installed_mods.len());
             for mod_info in installed_mods {
-                println!("- {} (version {})", mod_info.mod_name, mod_info.version);
+                println!(
+                    "- {} (version {})",
+                    mod_info.manifest.name, mod_info.manifest.version
+                );
             }
         }
 
         Commands::Show(args) => {
             println!("Checking installed mod information...");
-            let installed_mods = downloader.list_installed_mods()?;
-            if let Some(mod_info) = installed_mods.iter().find(|m| m.mod_name == args.name) {
+            let installed_mods = list_installed_mods(&mods_dir)?;
+            if let Some(mod_info) = installed_mods.iter().find(|m| m.manifest.name == args.name) {
                 println!("Mod Information:");
-                println!("- Name: {}", mod_info.mod_name);
-                println!("- Version: {}", mod_info.version);
+                println!("- Name: {}", mod_info.manifest.name);
+                println!("- Version: {}", mod_info.manifest.version);
             } else {
                 println!("The mod '{}' is not currently installed.", args.name);
             }
@@ -61,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // For remaining commands, fetch the remote mod registry
         _ => {
+            let downloader = ModDownloader::new(&mods_dir);
             let mod_registry_data = downloader.fetch_mod_registry().await?;
             let mod_registry = ModRegistry::from(mod_registry_data).await?;
 
@@ -116,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Commands::Update(args) => {
                     println!("Checking mod updates...");
-                    let available_updates = downloader.check_updates(&mod_registry)?;
+                    let available_updates = check_updates(&mods_dir, &mod_registry)?;
                     if available_updates.is_empty() {
                         println!("All mods are up to date!");
                     } else {
